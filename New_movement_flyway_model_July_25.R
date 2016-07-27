@@ -1,18 +1,18 @@
-#######################################################################
+#####################################################################################
 #
 # Main Migration Wrapper
-#---------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------
 #
 # Created by Sarah Jacobi, Eric Lonsdorf, Kevin Aagaard, Wayne Thogmartin
-# Tim Jones and Vicky Hunt in collaboration with the Integrated Waterbird Management 
-# and Monitoring Program
+# Tim Jones and Vicky Hunt in collaboration with the Integrated Waterbird 
+# Management and Monitoring Program
 #
 # Modified:  
 Sys.time()
 # By: Kevin Aagaard
 #
 # Create necessary inputs used in the movement script
-######################################################################
+#####################################################################################
 
 # This script is used to gather the necessary data for the flyway model.
 
@@ -66,8 +66,11 @@ NODE_DATA = data.frame(NODE_DATA)
 num_nodes <- nrow(NODE_DATA)
 
 #Rename columns to make it easier to reference them
-setnames(NODE_DATA, old= c("VALUE_1", "VALUE_82" ,"VALUE_90","VALUE_95", "MEAN_82", "MEAN_90", "MEAN_95", "STD_82", "STD_90" ,"STD_95"),
-         new=c("Shoreline", "Crops", "Woody_wet","Herb_wet", "Mean_crops","Mean_woody_wet","Mean_herb_wet", "STD_Crops","STD_woody_wet", "STD_herb_wet"))
+setnames(NODE_DATA, old= c("VALUE_1", "VALUE_82" ,"VALUE_90","VALUE_95", "MEAN_82", 
+                           "MEAN_90", "MEAN_95", "STD_82", "STD_90" ,"STD_95"),
+         new=c("Shoreline", "Crops", "Woody_wet","Herb_wet", "Mean_crops",
+               "Mean_woody_wet","Mean_herb_wet", "STD_Crops","STD_woody_wet",
+               "STD_herb_wet"))
 
 
 #Set node size in miles
@@ -78,18 +81,25 @@ node_move <- 3000 #How far birds can move within nodes in meters
 num_days <<- 237 #number of days in migration
 num_land_cover_class= 3 #number of land cover classes currently analyzed
 
-###############################################################################
+####################################################################################
 # This section is used to determine the distribution of starting birds and 
 # forage/roosting data
-###############################################################################
+####################################################################################
 
 #set up matrix to hold habitat data
 hab_dist <- matrix(0,num_nodes,num_land_cover_class)
 
-# Incorporate distance effects. Create normal distribution using mean and stdev dist to cover
-hab_dist[,1]<-pnorm(node_move,NODE_DATA[,"Mean_crops"],sapply(NODE_DATA[,"STD_Crops"], function(x) max(x,30)))
-hab_dist[,2]<-pnorm(node_move,NODE_DATA[,"Mean_woody_wet"],sapply(NODE_DATA[,"STD_woody_wet"], function(x) max(x,30)))
-hab_dist[,3]<-pnorm(node_move,NODE_DATA[,"Mean_herb_wet"],sapply(NODE_DATA[,"STD_herb_wet"], function(x) max(x,30)))
+# Incorporate distance effects. Create normal distribution using mean and stdev dist 
+#to cover
+hab_dist[,1]<-
+  pnorm(node_move,NODE_DATA[,"Mean_crops"],sapply(NODE_DATA[,"STD_Crops"], 
+                                                  function(x) max(x,30)))
+hab_dist[,2]<-
+  pnorm(node_move,NODE_DATA[,"Mean_woody_wet"],sapply(NODE_DATA[,"STD_woody_wet"], 
+                                                      function(x) max(x,30)))
+hab_dist[,3]<-
+  pnorm(node_move,NODE_DATA[,"Mean_herb_wet"],sapply(NODE_DATA[,"STD_herb_wet"], 
+                                                     function(x) max(x,30)))
 hab_dist[which(NODE_DATA[,"Crops"]==0),1]<-0
 hab_dist[which(NODE_DATA[,"Woody_wet"]==0),2]<-0
 hab_dist[which(NODE_DATA[,"Herb_wet"]==0),3]<-0
@@ -97,8 +107,11 @@ hab_dist[which(NODE_DATA[,"Herb_wet"]==0),3]<-0
 #Grab Y_INDEX and X_INDEX
 coords <- NODE_DATA[,2:3]
 
-#Grab FID, Y_INDEX, X_INDEX, Shoreline, crops, woody wet and herb wet. Mult by cum. norm value
-bird_hab <- cbind(NODE_DATA[1:6],as.numeric(NODE_DATA[,"Shoreline"]),NODE_DATA[,names(NODE_DATA) %in% c("Crops","Woody_wet","Herb_wet")]*hab_dist) 
+#Grab FID, Y_INDEX, X_INDEX, Shoreline, crops, woody wet and herb wet. 
+#Mult by cum. norm value
+bird_hab <- 
+  cbind(NODE_DATA[1:6],as.numeric(NODE_DATA[,"Shoreline"]),
+        NODE_DATA[,names(NODE_DATA)%in%c("Crops","Woody_wet","Herb_wet")]*hab_dist)
 
 #Rename columns
 setnames(bird_hab,c("as.numeric(NODE_DATA[, \"Shoreline\"])"),c("Shoreline"))
@@ -107,17 +120,20 @@ rm(hab_dist) #remove unneeded data
 bird_hab[,7:10] <- bird_hab[,7:10]/900 #Data is in square meters.  Covert to pixels
 #convert area into pixels and each pixel is a 30x30 cell (900 meters squared)
 
-#This calculation is used to distribute the birds among breeding nodes (shoreline + herb grass)
-#33945 kcal = 143k kJ, based on energy in breeding habitat
+#This calculation is used to distribute the birds among breeding nodes 
+#(shoreline + herb grass) 33945 kcal = 143k kJ, based on energy in breeding habitat
 
-cals_by_cover <- bird_hab[,7:10] #Use this to keep land cover types separate going forward
+#Use this to keep land cover types separate going forward
+cals_by_cover <- bird_hab[,7:10] 
 
-NODE_DATA$cals_sum<-rowSums(bird_hab)*33945 #Use this total number of kcal to distribute the birds
+#Use this total number of kcal to distribute the birds
+NODE_DATA$cals_sum<-rowSums(bird_hab)*33945 
 
 # Load data on mallard distribution according to BPOP and NatureServe
 S <- readShapePoly("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join")
 
-#Put Shape data into temp variable.  Note that Natureserve = 3 is non-breeding only; 2 is breeding only
+#Put Shape data into temp variable.  Note that Natureserve = 3 is non-breeding only; 
+#2 is breeding only
 tempS <- data.frame(S$ID, S$Y_INDEX, S$X_INDEX, S$NORMPOP, S$COUNT, S$Natureserv)
 
 #Grab number of columns in NODE_DATA
@@ -127,10 +143,11 @@ c<-ncol(NODE_DATA)
 atest <- S$NORMPOP*(S$Natureserv==2)
 atest[is.na(atest)]<-0 #Set NA to zero
 
-bird_start <- 1000000*sum(atest) #Sum up NORMPOP and mult. by 1M to get 20M birds to start
+#Sum up NORMPOP and mult. by 1M to get 20M birds to start
+bird_start <- 1000000*sum(atest) 
 
 tempS$conc <- paste0(tempS[,2], tempS[,3]) #Grab x,y coords from naturserve data
-NODE_DATA$conc <- paste0(NODE_DATA[,2],NODE_DATA[,3]) #Grab x,y coords from NOde data
+NODE_DATA$conc <- paste0(NODE_DATA[,2],NODE_DATA[,3]) #Grab xy coords from NOde data
 BB1 <- tempS[tempS[,"conc"] %in% NODE_DATA[,"conc"],1] #Find overlapping node coords
 #BB1= NODE_DATA[NODE_DATA[,"conc"] %in% tempS[,"conc"],1]
 BB <- BB1[1:num_nodes] #unsure why we get rid of last node
@@ -149,16 +166,24 @@ num_bird_nodes <- nrow(NODE_DATA)
 NODE_DATA_breed<-data.table(NODE_DATA)
 
 #Calculate normalized BPOP normpop over breeding nodes
-NODE_DATA_breed=NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),BPOP_wt:=newcol1/sum(newcol1,na.rm=TRUE)]
+NODE_DATA_breed=
+  NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),
+                  BPOP_wt:=newcol1/sum(newcol1,na.rm=TRUE)]
 
 #Calculate normalized calories over breeding nodes
-NODE_DATA_breed = NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),cal_wt:=cals_sum/sum(cals_sum,na.rm=TRUE)]
+NODE_DATA_breed = 
+  NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),
+                  cal_wt:=cals_sum/sum(cals_sum,na.rm=TRUE)]
 
 #Use the normalized calories and BPOPs to determine normalized wt for breeding nodes
-NODE_DATA_breed = NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),breed_wt:=BPOP_wt*cal_wt/sum(BPOP_wt*cal_wt,na.rm=TRUE)]
+NODE_DATA_breed = 
+  NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),
+                  breed_wt:=BPOP_wt*cal_wt/sum(BPOP_wt*cal_wt,na.rm=TRUE)]
 
 #Distribute the birds based on the breeding wt
-NODE_DATA_breed = NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),breed_pop:=round(bird_start*breed_wt)]
+NODE_DATA_breed = 
+  NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),
+                  breed_pop:=round(bird_start*breed_wt)]
 
 
 #Clean up temp variables
@@ -172,7 +197,8 @@ num_nodes <<- nrow(NODE_DATA)
 mtxNode <- data.frame(NODE_DATA[,1],NODE_DATA[,5],NODE_DATA[,6])
 
 #subset of mtxNode that are breeding nodes
-mtxBreedNodes <- NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),.(FID,Long,Lat)]
+mtxBreedNodes <- 
+  NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),.(FID,Long,Lat)]
 
 #start_nodes <- breeding_nodes
 init_birds <- NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),breed_pop]
@@ -186,9 +212,11 @@ start_birds <- init_birds/sum(init_birds)
 #We assume that max flight distance is fixed at 1400 miles
 #Nodes are 20 miles wide x 20 miles tall
 
-#There are two ways to determine window radius.  1) Fix the max flight distance. 2) grab distance from parameter file.
+#There are two ways to determine window radius.  1) Fix the max flight distance. 
+#2) grab distance from parameter file.
 Max_flight_distance= 1400 #miles
-#flight_dist<- parameters[rr,10] #Make sure this is the same value as is used to create window size
+#Make sure this is the same value as is used to create window size
+#flight_dist<- parameters[rr,10] 
 #flight_dist = 1400/.6 #Convert to km
 flight_dist = Max_flight_distance
 window_radius = Max_flight_distance/node_size
@@ -198,7 +226,8 @@ moving_window = matrix(0,window_radius*2+1,window_radius*2+1)
 rownames(moving_window)<-seq(-window_radius,window_radius,by=1)
 colnames(moving_window)<-seq(-window_radius,window_radius,by=1)
 
-#Fill in moving_window with the distance between the central node to each radial node
+#Fill in moving_window with the distance between the central node to each radial 
+#node
 for (i in 0:window_radius) {
   for (j in 0:window_radius) {
     rowstring = toString(i)
@@ -215,15 +244,20 @@ for (i in 0:window_radius) {
       moving_window[negrowstring,colstring] = node_size * i
     }
     else {
-      moving_window[rowstring,colstring] = sqrt((node_size * i)^2 + (node_size * j)^2)
-      moving_window[negrowstring,colstring] = sqrt((node_size * i)^2 + (node_size * j)^2)
-      moving_window[rowstring,negcolstring] = sqrt((node_size * i)^2 + (node_size * j)^2)
-      moving_window[negrowstring,negcolstring] = sqrt((node_size * i)^2 + (node_size * j)^2)
+      moving_window[rowstring,colstring] = 
+        sqrt((node_size * i)^2 + (node_size * j)^2)
+      moving_window[negrowstring,colstring] = 
+        sqrt((node_size * i)^2 + (node_size * j)^2)
+      moving_window[rowstring,negcolstring] = 
+        sqrt((node_size * i)^2 + (node_size * j)^2)
+      moving_window[negrowstring,negcolstring] = 
+        sqrt((node_size * i)^2 + (node_size * j)^2)
     }
   }
 }
 
-moving_window[moving_window>Max_flight_distance]<-0 #Zero out any nodes beyond max flight distance
+#Zero out any nodes beyond max flight distance
+moving_window[moving_window>Max_flight_distance]<-0 
 moving_window=moving_window*1.609344 #convert to km
 
 #Calculate the distance from each node to each breeding node
@@ -255,26 +289,28 @@ mtxNode <- NODE_DATA[,1:3]
 #May affect leave/stay decisions
 #Disturbance will decrease daily gain, maybe enough to force them to leave
 
-#Create different distrubance weights for each cover type (open space, low intense, med intense, 
-#high intense devel.)
+#Create different distrubance weights for each cover type (open space, low intense, 
+#med intense, high intense devel.)
 disturb_weights <- c(0.4, 0.6, 0.8, 1)
 
-#Disturbance is calculated as sum of open space, low/med/high intensity development divided by 
-#total habitat weight by disturbance weights
+#Disturbance is calculated as sum of open space, low/med/high intensity development 
+#divided by total habitat weight by disturbance weights
 disturbance <-as.matrix(NODE_DATA[,10:13])%*%(disturb_weights)/tot_hab
 
 #Daily gain was found by 100*(1-sum(disturbance))
-#This disturbance only includes "human non-hunting" effects.  Need to add hunting and temp
-#inpacts on daily gain
+#This disturbance only includes "human non-hunting" effects. Need to add hunting and 
+#temp inpacts on daily gain
 #DG = (Beta0i*di*ingestion)-BMR
 #Beta0i = current measure of human disturbance
 #di= disturbance coefficient describing harvest
 #ingestion=describe kJ consumed per day (maybe per habitat perhaps)
 #BMR= basal metabolic rate that is temp dependent
 
-#current DG is in kcals I believe. body condition is in grams.  Each body condition bin differs by 12.5 grams.
-#For now, place holder moves birds one body condition bin per day.  This is the same as converting 100 kcals to 12.5 grams
-DG <<- 100*rep(1,num_nodes)*(1-disturbance)/8 #8 is the conversion factor to change 100 kcal to 12.5 grams
+#current DG is in kcals I believe. body condition is in grams.  Each body condition 
+#bin differs by 12.5 grams. For now, place holder moves birds one body condition 
+#bin per day.  This is the same as converting 100 kcals to 12.5 grams
+DG <<- 100*rep(1,num_nodes)*(1-disturbance)/8 
+#8 is the conversion factor to change 100 kcal to 12.5 grams
 
 
 # Parameter scenarios
@@ -291,10 +327,18 @@ cals=matrix(0,length(bird_hab),4) #Create empty matrix to hold calorie data for
 #shoreline, crops, woody wet, herb wet
 
 #Keep cals separate by cover type
-cals.shore = as.matrix(as.numeric(bird_hab[,"Shoreline"])*as.matrix(param_scenarios[rr,"shoreline"]))
-cals.crops = as.matrix(as.numeric(bird_hab[,"Crops"])*as.matrix(param_scenarios[rr,"crops"]))
-cals.woody_wet = as.matrix(as.numeric(bird_hab[,"Woody_wet"])*as.matrix(param_scenarios[rr,"woody_wet"]))
-cals.herb_wet = as.matrix(as.numeric(bird_hab[,"Herb_wet"])*as.matrix(param_scenarios[rr,"herbaceous_wet"]))
+cals.shore = 
+  as.matrix(as.numeric(bird_hab[,"Shoreline"])*
+              as.matrix(param_scenarios[rr,"shoreline"]))
+cals.crops = 
+  as.matrix(as.numeric(bird_hab[,"Crops"])*
+              as.matrix(param_scenarios[rr,"crops"]))
+cals.woody_wet = 
+  as.matrix(as.numeric(bird_hab[,"Woody_wet"])*
+              as.matrix(param_scenarios[rr,"woody_wet"]))
+cals.herb_wet = 
+  as.matrix(as.numeric(bird_hab[,"Herb_wet"])*
+              as.matrix(param_scenarios[rr,"herbaceous_wet"]))
 
 #Add node id data to input data
 forage=cbind(NODE_DATA[,1:6],cals.shore,cals.crops,cals.woody_wet,cals.herb_wet)
@@ -366,14 +410,19 @@ DG[,':='(New_Y_INDEX=max(Y_INDEX)+1-Y_INDEX)]
 
 #put data into correct format to match with moving_window
 NODE_DATA_breed[,':='(NEW_Y_INDEX=max(Y_INDEX)+1-Y_INDEX)]
-init_birds.matrix= as.matrix(dcast(NODE_DATA_breed,X_INDEX~NEW_Y_INDEX, value.var="breed_pop"))
+init_birds.matrix= 
+  as.matrix(dcast(NODE_DATA_breed,X_INDEX~NEW_Y_INDEX, value.var="breed_pop"))
 rownames(init_birds.matrix) = init_birds.matrix[,1]
 init_birds.matrix = init_birds.matrix[,-1]
 
-forage.shore.matrix = as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.shore"))
-forage.crops.matrix = as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.crops"))
-forage.woody_wet.matrix = as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.woody_wet"))
-forage.herb_wet.matrix = as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.herb_wet"))
+forage.shore.matrix = 
+  as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.shore"))
+forage.crops.matrix = 
+  as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.crops"))
+forage.woody_wet.matrix = 
+  as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.woody_wet"))
+forage.herb_wet.matrix = 
+  as.matrix(dcast(forage, X_INDEX~New_Y_INDEX,value.var="cals.herb_wet"))
 rownames(forage.shore.matrix)=forage.shore.matrix[,1]
 rownames(forage.crops.matrix)=forage.crops.matrix[,1]
 rownames(forage.woody_wet.matrix)=forage.woody_wet.matrix[,1]
@@ -385,11 +434,14 @@ forage.herb_wet.matrix=forage.herb_wet.matrix[,-1]
 
 #forage.matrix=forage.matrix[,-1]
 
-roosting.matrix=as.matrix(dcast(roosting,X_INDEX~New_Y_INDEX,value.var="percent_shore"))
+roosting.matrix=
+  as.matrix(dcast(roosting,X_INDEX~New_Y_INDEX,value.var="percent_shore"))
 rownames(roosting.matrix)=roosting.matrix[,1] #Set row names
 roosting.matrix=roosting.matrix[,-1] #remove column of row names
 
-distance_to_breed.matrix=as.matrix(dcast(distance_to_breed,X_INDEX~New_Y_INDEX,value.var="distance_to_breed"))
+distance_to_breed.matrix=
+  as.matrix(dcast(distance_to_breed,X_INDEX~New_Y_INDEX,
+                  value.var="distance_to_breed"))
 rownames(distance_to_breed.matrix)=distance_to_breed.matrix[,1]
 distance_to_breed.matrix=distance_to_breed.matrix[,-1]
 
@@ -406,8 +458,11 @@ image.plot(roosting.matrix)
 image.plot(distance_to_breed.matrix)
 image.plot(distance_to_arrival)
 image.plot(DG.matrix)
-#Next steps -> augment the matrices by adding zeros the size of the radius in all directions
-min_data_node = window_radius +1 #This is the node id that starts holding data for the actual landscape.  Holds for x and y
+#Next steps -> augment the matrices by adding zeros the size of the radius in all 
+#directions
+min_data_node = window_radius +1 
+#This is the node id that starts holding data for the actual landscape.  
+#Holds for x and y
 
 num_rows_orig = nrow(forage.shore.matrix)
 num_cols_orig=ncol(forage.shore.matrix)
@@ -427,13 +482,20 @@ roosting.matrix.full = matrix(data=NA,nrow=num_rows, ncol =num_cols)
 distance_to_breed.matrix.full = matrix(data=NA,nrow=num_rows, ncol =num_cols)
 DG.matrix.full = matrix(data=NA,nrow=num_rows, ncol =num_cols)
 
-forage.shore.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = forage.shore.matrix
-forage.crops.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = forage.crops.matrix
-forage.woody_wet.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = forage.woody_wet.matrix
-forage.herb_wet.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = forage.herb_wet.matrix
-roosting.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = roosting.matrix
-distance_to_breed.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = distance_to_breed.matrix
-DG.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = DG.matrix
+forage.shore.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  forage.shore.matrix
+forage.crops.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  forage.crops.matrix
+forage.woody_wet.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  forage.woody_wet.matrix
+forage.herb_wet.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  forage.herb_wet.matrix
+roosting.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  roosting.matrix
+distance_to_breed.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  distance_to_breed.matrix
+DG.matrix.full[min_x_node:max_x_node, min_y_node:max_y_node] = 
+  DG.matrix
 
 #Incorporate decay by land cover - this can be preprocessed
 forage.by.day = array(data=NA, dim=c(num_rows,num_cols,num_days))
@@ -443,8 +505,11 @@ decay = as.matrix(c(0.9998, 0.997, 0.9965, 0.991),nrows = 4, ncol =1)
 rownames(decay)=c("shoreline","crops","woody_wet","herb_wet")
 
 for (i in 1:num_days) {
-  forage.by.day[,,i]=forage.shore.matrix.full*decay["shoreline",1]^(i-1)+forage.crops.matrix.full*decay["crops",1]^(i-1)+
-    forage.woody_wet.matrix.full*decay["woody_wet",1]^(i-1)+forage.herb_wet.matrix.full*decay["herb_wet",1]^(i-1)
+  forage.by.day[,,i] = 
+    forage.shore.matrix.full*decay["shoreline",1]^(i-1) + 
+    forage.crops.matrix.full*decay["crops",1]^(i-1) + 
+    forage.woody_wet.matrix.full*decay["woody_wet",1]^(i-1) + 
+    forage.herb_wet.matrix.full*decay["herb_wet",1]^(i-1)
 }
 
 #forage.shore.matrix.full = forage.shore.matrix.full*(decay["shoreline",1])^(d-1)
@@ -466,14 +531,16 @@ daily_survival = matrix(0,body_condition_bins)
 
 #Divide range equally
 for (i in 1:body_condition_bins) {
-  daily_survival[i,1] = (max_survival - min_survival)/body_condition_bins*i + min_survival
+  daily_survival[i,1] = 
+    (max_survival - min_survival)/body_condition_bins*i + min_survival
 }
 
-#Assume that the energy used in migration is from lipid reserves exclusively (Whyte and Bolen 1988)
-#Note: this assumption is not entirely true.  Hanson et al. (1990) show carbs used in Sept. and lipids Nov/Dec.
+#Assume that the energy used in migration is from lipid reserves exclusively 
+#(Whyte and Bolen 1988). Note: this assumption is not entirely true: Hanson et al. 
+#(1990) show carbs used in Sept. and lipids Nov/Dec.
 
-#Divide expected max lipid levels into 20 bins (see Whyte and Bolen 1988 for similar construct)
-#Mallards have low end of 20g and high end of 270 g.
+#Divide expected max lipid levels into 20 bins (see Whyte and Bolen 1988 for 
+#similar construct). Mallards have low end of 20g and high end of 270 g.
 
 #Create a vector of body conditions from the lowest fat reserves to highest
 
@@ -481,14 +548,17 @@ body_low = 20 #grams
 body_high = 270 #grams
 
 body_condition_bin_size = (body_high-body_low)/body_condition_bins
-body_conditions_low = seq(body_low,body_high-body_condition_bin_size,by=body_condition_bin_size)
-body_conditions_high = seq(body_low+body_condition_bin_size,body_high,by=body_condition_bin_size)
+body_conditions_low = 
+  seq(body_low,body_high-body_condition_bin_size,by=body_condition_bin_size)
+body_conditions_high = 
+  seq(body_low+body_condition_bin_size,body_high,by=body_condition_bin_size)
 body_conditions = cbind(body_conditions_low, body_conditions_high)
 #add mean
 body_conditions=cbind(body_conditions,rowMeans(body_conditions))
 
 #For now, create two 4-D arrays.  One for am and one for pm
-#Create a 4-D array to use for birds. Dim = days, x by y nodes (including padding), body condition bin
+#Create a 4-D array to use for birds. Dim = days, x by y nodes (including padding), 
+#body condition bin
 #bird_pop.am = array(data=0, dim=c(num_days,num_rows,num_cols,body_condition_bins))
 bird_pop.am = array(data=NA, dim=c(num_days,num_rows-2*window_radius,num_cols-2*window_radius,body_condition_bins))
 bird_pop.pm = bird_pop.am
@@ -499,42 +569,48 @@ bird_pop.am[1,,,body_condition_bins] = init_birds.matrix
 bird_pop.am[is.na(bird_pop.am)] =0
 
 
-#Create a logical array that descirbes the possibility of moving from each body condition to each other
-#for all combos of nodes in the window.  This is not temp dependent
+#Create a logical array that descirbes the possibility of moving from each body 
+#condition to each other for all combos of nodes in the window.  This is not temp 
+#dependent
 
-body_change_logical = array(data=NA,dim=c(body_condition_bins,body_condition_bins,dim(distance_to_arrival)))
+body_change_logical = 
+  array(data=NA,dim=c(body_condition_bins,body_condition_bins,
+                      dim(distance_to_arrival)))
 
 #Empirically determined cost of flight per unit distance = HBMR*12/Flight speed.
-#For this, we assume HBMR in thermal-neutral zone = 18.8KJ and flight speed = 72 km/hr
-#Convert energy in KJ to g of lipids: 37 kJ/g
+#For this, we assume HBMR in thermal-neutral zone = 18.8KJ and flight speed = 72 
+#km/hr. Convert energy in KJ to g of lipids: 37 kJ/g
 convert_to_g = (18.8*12/72)/37 #units = g/km
-moving_window.grams = moving_window*convert_to_g#This stores the cost in grams of moving from focal node to all nodes in window
+#This stores the cost in grams of moving from focal node to all nodes in window
+moving_window.grams = moving_window*convert_to_g
 
-#Create "pages" of logical node maps describing which from-to body conditions are possible
+#Create "pages" of logical node maps describing which from-to body conditions are 
+#possible
 for (i in 1:body_condition_bins){
   new_body = (body_conditions[i,3]-moving_window.grams)*(moving_window.grams!=0)
   new_body = new_body*(new_body>0) #remove any unattainable nodes
   for (j in 1:body_condition_bins) {
-    body_change_logical[i,j,,]=(new_body>=body_conditions[j,1])&(new_body<body_conditions[j,2])  
+    body_change_logical[i,j,,]=
+      (new_body>=body_conditions[j,1])&(new_body<body_conditions[j,2])  
   }
 }
 
 
-######################################################################################################
+####################################################################################
 #
-#Starting from the first node, create a window around it. Normalize forage, roosting, distance based on
-#WSI mask.
+#Starting from the first node, create a window around it. Normalize forage, 
+#roosting, distance based on WSI mask.
 #
 #
-######################################################################################################
+####################################################################################
 
 #read in WSI data from text file
 WSI_DATA <- fread("NorAm_historical_wsi_node_info.txt")
 WSI_DATA_frame = data.frame(WSI_DATA)
 data_columns = colnames(WSI_DATA_frame)
 
-#subset out a particular migration period (don't want to base this on calendar year, but
-#rather on annual migratory cycle; i.e., fall one year to spring the next)
+#subset a particular migration period (don't want to base this on calendar year,
+#but rather on annual migratory cycle; i.e., fall one year to spring the next)
 target_year = 2002
 nonbreeding_year = c(as.character(target_year),as.character(target_year+1))
 target_dates=c(paste0(nonbreeding_year[1],c("_09_","_10_","_11_","_12_")),
@@ -546,7 +622,8 @@ for(i in 2:length(target_dates)){
     c(nonbreeding_period,data_columns[grepl(target_dates[i],data_columns)]) 
 }
 
-WSI_DATA.nonbreeding_period = WSI_DATA_frame[,c('X_INDEX','Y_INDEX',nonbreeding_period)]
+WSI_DATA.nonbreeding_period = 
+  WSI_DATA_frame[,c('X_INDEX','Y_INDEX',nonbreeding_period)]
 #Convert to moving_window format
 WSI=data.table(WSI_DATA.nonbreeding_period)
 WSI[,`:=`(New_Y_INDEX=max(Y_INDEX)+1-Y_INDEX)]
@@ -559,10 +636,12 @@ WSI.array = array(data=NA,dim=c(dim(roosting.matrix.full),ncol(WSI-2)))
 j=1
 for (i in colnames(WSI)) { #Loop through the columns, each is a day
   if (grepl("INDEX",i)==FALSE){ #First 2 columns are location data
-    A = as.matrix(dcast(WSI,X_INDEX~New_Y_INDEX,value.var=i)) #Covert to moving_window "raster"
+    #Covert to moving_window "raster"
+    A = as.matrix(dcast(WSI,X_INDEX~New_Y_INDEX,value.var=i)) 
     rownames(A)=A[,1] #Move row names
     A=A[,-1] #Remove row names from data
-    WSI.array[min_x_node:max_x_node, min_y_node:max_y_node,j] = A # fill in the non-padding portion of array with data
+    #fill in the non-padding portion of array with data
+    WSI.array[min_x_node:max_x_node, min_y_node:max_y_node,j] = A 
     j=j+1
     
   }
@@ -572,7 +651,8 @@ for (i in colnames(WSI)) { #Loop through the columns, each is a day
 #prob_depart = array(runif(122*nrow(roosting.matrix)*ncol(roosting.matrix)*body_condition_bins),c(122,nrow(roosting.matrix),ncol(roosting.matrix),body_condition_bins))
 
 prob_depart.WSI = (WSI.array+10)^3/(WSI.array+10^3+10^3)*(WSI.array>0)
-#prob_depart.DG = linear decreasing function. In Chicago meeting in April 2016, 1-(DG+1)/5. DG = {-1,0,1,2,3,
+#prob_depart.DG = linear decreasing function. In Chicago meeting in April 2016, 
+#1-(DG+1)/5. DG = {-1,0,1,2,3,
 weight.WSI = 0.5
 weight.BC = 0.5
 
@@ -587,80 +667,98 @@ data_nodes = which(!is.na(roosting.matrix.full),TRUE)
 
 
 
-#Variables still needed: num_days, roosting.matrix, data_nodes, window_radius, bird_pop.am, forage.by.day, roosting.matrix.full, distance_to_breed.matrix.full, WSI.array, distance_to_arrival,W1, W2, W3, W4,
-#body_condition_bins, DG.matrix.full, Weight.WSI, prob_depart.WSI, daily_survival, weight.BC, bird_pop.pm
+#Variables still needed: num_days, roosting.matrix, data_nodes, window_radius, 
+#bird_pop.am, forage.by.day, roosting.matrix.full, distance_to_breed.matrix.full, 
+#WSI.array, distance_to_arrival,W1, W2, W3, W4, body_condition_bins, DG.matrix.full, 
+#Weight.WSI, prob_depart.WSI, daily_survival, weight.BC, bird_pop.pm
 
-rm(list= ls()[!(ls() %in% c('num_rows_orig', 'num_cols_orig','num_days','roosting.matrix','data_nodes','window_radius','bird_pop.am','forage.by.day','roosting.matrix.full',
-                            'distance_to_breed.matrix.full', 'WSI.array', 'distance_to_arrival','W1', 'W2', 'W3', 'W4','body_condition_bins',
-                            'DG.matrix.full', 'weight.WSI', 'prob_depart.WSI', 'daily_survival', 'weight.BC', 'bird_pop.pm','body_conditions','body_change_logical'))])
+rm(list=ls()[!(ls()%in%c('num_rows_orig', 'num_cols_orig','num_days',
+                         'roosting.matrix','data_nodes','window_radius',
+                         'bird_pop.am','forage.by.day','roosting.matrix.full',
+                         'distance_to_breed.matrix.full', 'WSI.array', 
+                         'distance_to_arrival','W1', 'W2', 'W3', 'W4',
+                         'body_condition_bins','DG.matrix.full', 'weight.WSI',
+                         'prob_depart.WSI', 'daily_survival', 'weight.BC', 
+                         'bird_pop.pm','body_conditions','body_change_logical'))])
 gc()
 
 #d=1
 #Loop over days and nodes
 #for (d in 1:num_days) {  #Number of days of WSI data so far
 
+#Used to convert to correct indices based on padding of zeros
+x = data_nodes[,1]-window_radius
+y = data_nodes[,2]-window_radius
+
+lower_bound_x = data_nodes[,1]-window_radius 
+upper_bound_x = data_nodes[,1]+window_radius
+
+lower_bound_y = data_nodes[,2]-window_radius
+upper_bound_y = data_nodes[,2]+window_radius
+
+lb_x = ifelse(x-window_radius<1,1,x-window_radius)
+up_x = ifelse(x+window_radius>num_rows_orig, num_rows_orig, x+window_radius)
+
+lb_y = ifelse(y-window_radius<1,1,y-window_radius)
+up_y = ifelse(y+window_radius>num_cols_orig, num_cols_orig, y+window_radius)
+
+energy_needed.total=0
+
 for (d in 1:5){
   for (i in 1:nrow(data_nodes) ) { #Loop through data nodes
     focal_node_x=data_nodes[i,1] #Grab x and y indices
     focal_node_y=data_nodes[i,2]
     
-    #Used to convert to correct indices based on padding of zeros
-    x = focal_node_x-window_radius
-    y=focal_node_y-window_radius
-    
-    lower_bound_x = focal_node_x-window_radius 
-    upper_bound_x = focal_node_x+window_radius
-    
-    lower_bound_y = focal_node_y-window_radius
-    upper_bound_y = focal_node_y+window_radius
-    
-    lb_x = ifelse(x-window_radius<1,1,x-window_radius)
-    up_x = ifelse(x+window_radius>num_rows_orig, num_rows_orig, x+window_radius)
-    
-    lb_y = ifelse(y-window_radius<1,1,y-window_radius)
-    up_y = ifelse(y+window_radius>num_cols_orig, num_cols_orig, y+window_radius)
-    
     #Check if there are birds in the node at the start of the day  
-    if (sum(bird_pop.am[d,focal_node_x-window_radius,focal_node_y-window_radius,],na.rm=TRUE) >0 ) {
+    if (sum(bird_pop.am[d, x[i], y[i],], na.rm=TRUE) > 0) {
       #There are birds in the node. 
       
       #create a window around focal node
-      forage.window = forage.by.day[lower_bound_x:upper_bound_x, lower_bound_y: upper_bound_y,d]
-      roosting.window=roosting.matrix.full[lower_bound_x:upper_bound_x,lower_bound_y:upper_bound_y]
-      distance_to_breed.window=distance_to_breed.matrix.full[lower_bound_x:upper_bound_x,lower_bound_y:upper_bound_y]
+      forage.window = forage.by.day[lower_bound_x[i]:upper_bound_x[i], 
+                                    lower_bound_y[i]:upper_bound_y[i], d]
+      roosting.window=roosting.matrix.full[lower_bound_x[i]:upper_bound_x[i],
+                                           lower_bound_y[i]:upper_bound_y[i]]
+      distance_to_breed.window=
+        distance_to_breed.matrix.full[lower_bound_x[i]:upper_bound_x[i],
+                                      lower_bound_y[i]:upper_bound_y[i]]
       
       #Normalize what is in the window
       forage.window.norm=forage.window/sum(sum(forage.window,na.rm=TRUE))
       roosting.window.norm=roosting.window/sum(sum(roosting.window,na.rm=TRUE))
       
-      #Distance to breed has opposite direction of imporance (closer is better)
+      #Distance to breed has opposite direction of importance (closer is better)
       max.distance = max(max(distance_to_breed.window, na.rm=TRUE))
-      distance_to_breed.norm =(max.distance-distance_to_breed.window)/sum(sum((max.distance-distance_to_breed.window),na.rm=TRUE))
+      distance_to_breed.norm =
+        (max.distance-distance_to_breed.window)/
+        sum(sum((max.distance-distance_to_breed.window),na.rm=TRUE))
       
       #WSI should be mask to remove "poor weather" nodes
       #Using a WSI cutoff of 7.5 for mallards from the Schummer et al. 2010 paper
       WSI.cutoff = 7.5
-      WSI.array.window = WSI.array[lower_bound_x:upper_bound_x, lower_bound_y:upper_bound_y,]
+      WSI.array.window = WSI.array[lower_bound_x[i]:upper_bound_x[i], 
+                                   lower_bound_y[i]:upper_bound_y[i],]
       WSI.mask = (WSI.array.window[,,d]<=WSI.cutoff)*1
       
       #Use Cobb-Douglas function to combine components of "attractiveness"
-      window_movements = WSI.mask*((forage.window.norm)^W1 * (roosting.window.norm)^W2 *
-                                     (distance_to_breed.norm)^W3 * (distance_to_arrival)^W4)
+      window_movements = 
+        WSI.mask*((forage.window.norm)^W1 * (roosting.window.norm)^W2 *
+                    (distance_to_breed.norm)^W3 * (distance_to_arrival)^W4)
       
       #Normalize probability over window
-      window_movements = window_movements/sum(sum(window_movements, na.rm=TRUE),na.rm=TRUE)
-      
-      energy_needed.total=0
+      window_movements = 
+        window_movements/sum(sum(window_movements, na.rm=TRUE), na.rm=TRUE)
       
       #Loop over body conditions      
       for (body_cond in 1:body_condition_bins) { 
         
         #Check that there are birds in the current body condition
-        if (bird_pop.am[d,x,y,body_cond]>0){
-          #Assume the birds at the beginning of the day forage for the day. Then decide to stay or leave at night
+        if (bird_pop.am[d, x[i], y[i], body_cond]>0){
+          #Assume the birds at the beginning of the day forage for the day. 
+          #Then decide to stay or leave at night
           
           #Determine new body condition based on daily gain
-          new.bc = body_conditions[body_cond,3]+DG.matrix.full[focal_node_x,focal_node_y]
+          new.bc = body_conditions[body_cond,3]+
+            DG.matrix.full[focal_node_x,focal_node_y]
           
           #Figure out which bin the new body condition is in
           if (new.bc > max(body_conditions[,2])) {
@@ -670,44 +768,52 @@ for (d in 1:5){
           } else if (new.bc == min(body_conditions[1])) {
             new.bc.bin = 1
           } else {
-            new.bc.bin = which(new.bc>body_conditions[,1] & body_conditions[,2]>=new.bc)
+            new.bc.bin=
+              which(new.bc > body_conditions[,1] & body_conditions[,2] >= new.bc)
           }
           
           #Compute landscape energetics required to fuel birds:
           #Convert grams to kJ using 37 kJ/g lipids
           energy_needed = DG.matrix.full[focal_node_x,focal_node_y]*
-            bird_pop.am[d,x,y,body_cond]*37
+            bird_pop.am[d, x[i], y[i], body_cond]*37
           energy_needed.total = energy_needed.total+energy_needed
           
           #Surviving birds at end of the day of foraging.
-          bird_pop.pm[d,x,y,new.bc.bin]=bird_pop.am[d,x,y,body_cond]*
+          bird_pop.pm[d, x[i], y[i], new.bc.bin] = 
+            bird_pop.am[d,x,y,body_cond]* 
             ifelse(forage.by.day[focal_node_x,focal_node_y,d]==0,0,
-                   max(1,energy_needed/forage.by.day[focal_node_x,focal_node_y,d], na.rm=TRUE))*daily_survival[body_cond,1]
+                   max(1,energy_needed/forage.by.day[focal_node_x,focal_node_y,d], 
+                       na.rm=TRUE))*daily_survival[body_cond,1]
           
           #Reduce forage for next body conditions of birds
-          forage.by.day[focal_node_x,focal_node_y,d] = max(0,(forage.by.day[focal_node_x,focal_node_y,d]-energy_needed))
+          forage.by.day[focal_node_x, focal_node_y, d] = 
+            max(0,(forage.by.day[focal_node_x, focal_node_y, d]-energy_needed))
           
           #Compute probabily of departing
-          prob_depart = weight.WSI*prob_depart.WSI[focal_node_x,focal_node_y,d]+weight.BC*(body_cond^8/(body_cond^8+17^8))
+          prob_depart = 
+            weight.WSI*prob_depart.WSI[focal_node_x, focal_node_y, d] + 
+            weight.BC*(body_cond^8/(body_cond^8+17^8))
           
-          #Generate a random 0-1 and see if it is below the prob_depart.  If so, birds leave.  Else, birds stay
+          #Generate a random 0-1 and see if it is below the prob_depart.  If so, 
+          #birds leave.  Else, birds stay
           if (runif(1)<prob_depart) { 
             #Birds leave
             #Move birds according to window_movements and body_change_logical
-            for (bc_to in 1:body_condition_bins) { #Loop through all body condition "to" bins
+            for (bc_to in 1:body_condition_bins) { 
+              #Loop through all body condition "to" bins
               
               Added_birds=
-                bird_pop.pm[d,x,y,new.bc.bin]*
+                bird_pop.pm[d, x[i], y[i], new.bc.bin]*
                 (window_movements*body_change_logical[new.bc.bin,bc_to,,])
-              #Bird_pop arrays don't have padding to save storage.  Need to only fill in parts of the window
-              #that are within the bounds
+              #Bird_pop arrays don't have padding to save storage.  Need to only 
+              #fill in parts of the window that are within the bounds
               #Check if the window goes beyond the size of bird_pop.am or bird_pop.pm
-              if ((x-window_radius)>=1) {
+              if ((x[i]-window_radius)>=1) {
                 lb_x_in = TRUE #lower bound within bird_pop
                 start_x=1
               } else {
                 lb_x_in = FALSE #lower bound outside
-                start_x=(nrow(Added_birds)-(up_x-lb_x))
+                start_x=(nrow(Added_birds)-(up_x[i] - lb_x[i]))
               }
               
               #Do same for y dimension
@@ -716,7 +822,7 @@ for (d in 1:5){
                 start_y=1
               } else {
                 lb_y_in = FALSE
-                start_y=(ncol(Added_birds)-(up_y-lb_y))
+                start_y=(ncol(Added_birds)-(up_y[i] - lb_y[i]))
               }
               
               #Check upper bounds
@@ -725,7 +831,7 @@ for (d in 1:5){
                 end_x=nrow(Added_birds)
               }  else {
                 up_x_in = FALSE
-                end_x=(up_x-lb_x+1)
+                end_x=(up_x[i] - lb_x[i]+1)
               }
               
               if ((y+window_radius)<=num_cols_orig) {
@@ -733,25 +839,29 @@ for (d in 1:5){
                 end_y=ncol(Added_birds)
               }  else {
                 up_y_in = FALSE
-                end_y=(up_y-lb_y+1)
+                end_y=(up_y[i] - lb_y[i]+1)
               }
               
               
-              bird_pop.am[d+1,lb_x:up_x, lb_y:up_y, bc_to]=bird_pop.am[d+1,lb_x:up_x, lb_y:up_y,bc_to]+
+              bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], bc_to] = 
+                bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], bc_to] +
                 Added_birds[start_x:end_x, start_y:end_y]
             }
           } else {# if loop
             #Move all pm birds to next day am
-            bird_pop.am[d+1,x,y,new.bc.bin]=bird_pop.pm[d,x,y,new.bc.bin]
+            bird_pop.am[d+1, x[i], y[i], new.bc.bin] = 
+              bird_pop.pm[d, x[i], y[i], new.bc.bin]
           }
           
-          #Any other case in which birds leave?  In prototype, they leave if they are in highest body condition class
+          #Any other case in which birds leave?  In prototype, they leave if they 
+          #are in highest body condition class
           
           
         } #else loop
       } #for loop
       #reduce the forage on the next day by amount of energy_needed
-      forage.by.day[focal_node_x,focal_node_y,d+1]=max(0,(forage.by.day[focal_node_x,focal_node_y,d]-energy_needed.total))
+      forage.by.day[focal_node_x, focal_node_y, d+1] = 
+        max(0,(forage.by.day[focal_node_x, focal_node_y, d] - energy_needed.total))
     } #if loop
   } #i loop
   
