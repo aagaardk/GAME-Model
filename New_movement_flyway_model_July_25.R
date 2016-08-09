@@ -127,7 +127,7 @@ bird_hab[,7:10] <- bird_hab[,7:10]/900 #Data is in square meters.  Covert to pix
 cals_by_cover <- bird_hab[,7:10] 
 
 #Use this total number of kcal to distribute the birds
-NODE_DATA$cals_sum<-rowSums(bird_hab)*33945 
+NODE_DATA$cals_sum<-rowSums(cals_by_cover)*33945 
 
 # Load data on mallard distribution according to BPOP and NatureServe
 S <- readShapePoly("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join")
