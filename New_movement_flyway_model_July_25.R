@@ -24,9 +24,8 @@ rm(list=ls())
 # setwd("~/IDriveSync/UpdatedSync/NPAM_v8_June23_2014/IWMM Code/IWMMFlywayCode_latest")
 
 # #For Kevin
-work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
-                     "IWMM Efforts","Flyway Model Project","Modelling",
-                     "Scripts and data")
+work_dir = file.path("C:","Users","kaagaard","Documents","IWMM_Efforts",
+                     "Flyway Model Project","Modelling","Scripts and data")
 setwd(work_dir)
 
 setwd(paste(getwd(),'/R',sep=''))
@@ -130,7 +129,8 @@ cals_by_cover <- bird_hab[,7:10]
 NODE_DATA$cals_sum<-rowSums(bird_hab)*33945 
 
 # Load data on mallard distribution according to BPOP and NatureServe
-S <- readShapePoly("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join")
+#S <- readShapePoly("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join")
+S <- read.dbf("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join.dbf")
 
 #Put Shape data into temp variable.  Note that Natureserve = 3 is non-breeding only; 
 #2 is breeding only
@@ -702,7 +702,7 @@ up_x = ifelse(x+window_radius>num_rows_orig, num_rows_orig, x+window_radius)
 lb_y = ifelse(y-window_radius<1,1,y-window_radius)
 up_y = ifelse(y+window_radius>num_cols_orig, num_cols_orig, y+window_radius)
 
-energy_needed.total=0
+energy_needed.total=0.0
 
 for (d in 1:5){
   for (i in 1:nrow(data_nodes) ) { #Loop through data nodes
