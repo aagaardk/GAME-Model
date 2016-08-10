@@ -9,7 +9,7 @@
 #
 # Modified:  
 Sys.time()
-# By: Kevin Aagaard
+# By: Sarah Jacobi - adding new speed ups
 #
 # Create necessary inputs used in the movement script
 ######################################################################
@@ -21,15 +21,15 @@ rm(list=ls())
 
 #Set working directory
 # #For Sarah:
-# setwd("~/IDriveSync/UpdatedSync/NPAM_v8_June23_2014/IWMM Code/IWMMFlywayCode_latest")
+setwd("~/IDriveSync/IWMM/migration_model")
 
 # #For Kevin
-work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
-                     "IWMM Efforts","Flyway Model Project","Modelling",
-                     "Scripts and data")
-setwd(work_dir)
+#work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
+#                     "IWMM Efforts","Flyway Model Project","Modelling",
+#                     "Scripts and data")
+#setwd(work_dir)
 
-setwd(paste(getwd(),'/R',sep=''))
+#setwd(paste(getwd(),'/R',sep=''))
 
 #Include necessary libraries
 library(compiler)
@@ -37,6 +37,7 @@ library(fields)
 library(maptools)
 library(data.table)
 library(plyr)
+library(foreign)
 
 require(data.table)
 
@@ -112,11 +113,12 @@ bird_hab[,7:10] <- bird_hab[,7:10]/900 #Data is in square meters.  Covert to pix
 
 cals_by_cover <- bird_hab[,7:10] #Use this to keep land cover types separate going forward
 
-#test
+#fixed on August 8
 NODE_DATA$cals_sum<-rowSums(cals_by_cover)*33945 #Use this total number of kcal to distribute the birds
 
 # Load data on mallard distribution according to BPOP and NatureServe
-S <- readShapePoly("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join")
+#S <- readShapePoly("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join")
+S<- read.dbf("NorthAmeerica_20mi_grid_wAK_BPOP_NSmallard_join..dbf")
 
 #Put Shape data into temp variable.  Note that Natureserve = 3 is non-breeding only; 2 is breeding only
 tempS <- data.frame(S$ID, S$Y_INDEX, S$X_INDEX, S$NORMPOP, S$COUNT, S$Natureserv)
@@ -591,10 +593,92 @@ data_nodes = which(!is.na(roosting.matrix.full),TRUE)
 #Variables still needed: num_days, roosting.matrix, data_nodes, window_radius, bird_pop.am, forage.by.day, roosting.matrix.full, distance_to_breed.matrix.full, WSI.array, distance_to_arrival,W1, W2, W3, W4,
 #body_condition_bins, DG.matrix.full, Weight.WSI, prob_depart.WSI, daily_survival, weight.BC, bird_pop.pm
 
-rm(list= ls()[!(ls() %in% c('num_rows_orig', 'num_cols_orig','num_days','roosting.matrix','data_nodes','window_radius','bird_pop.am','forage.by.day','roosting.matrix.full',
+rm(list= ls()[!(ls() %in% c('init_birds.matrix','num_rows_orig', 'num_cols_orig','num_days','roosting.matrix','data_nodes','window_radius','bird_pop.am','forage.by.day','roosting.matrix.full',
                             'distance_to_breed.matrix.full', 'WSI.array', 'distance_to_arrival','W1', 'W2', 'W3', 'W4','body_condition_bins',
                             'DG.matrix.full', 'weight.WSI', 'prob_depart.WSI', 'daily_survival', 'weight.BC', 'bird_pop.pm','body_conditions','body_change_logical'))])
 gc()
+
+#Set up vars
+
+focal_node_x =data_nodes[,1] #Grab x and y indices
+focal_node_y=data_nodes[,2]
+
+#Used to convert to correct indices based on padding of zeros
+x = focal_node_x-window_radius
+y=focal_node_y-window_radius
+
+lower_bound_x = focal_node_x-window_radius 
+upper_bound_x = focal_node_x+window_radius
+
+lower_bound_y = focal_node_y-window_radius
+upper_bound_y = focal_node_y+window_radius
+
+lb_x = ifelse(x-window_radius<1,1,x-window_radius)
+up_x = ifelse(x+window_radius>num_rows_orig, num_rows_orig, x+window_radius)
+
+lb_y = ifelse(y-window_radius<1,1,y-window_radius)
+up_y = ifelse(y+window_radius>num_cols_orig, num_cols_orig, y+window_radius)
+
+#used to convert data indices to bird pop indices since they aren't the same size
+lb_x_small = ifelse((x-window_radius)>=1,1,(nrow(window_movements)-(up_x-lb_x)))
+up_x_small
+
+lb_y_small
+up_y_small
+
+
+#######################################################################
+#Define necessary functions used in for loop
+
+#######################################################################
+#Function Name: Get_index
+#Purpose: grabs the lower and upper bounds for the bird_pop arrays
+#         These arrays do not have padding, so array indicies do not
+#         match data layer indices
+#Inputs: window_radius, x, y (current node indices), i (loop index)
+#        num_rows_orig, num_cols_org (number of rows and columns in 
+#        unpadded landscape)
+#Outputs: list of start_x, end_x, start_y, end_y (index bounds)
+#        
+######################################################################
+Get_index <- function(window_radius, x, y, i, num_rows_orig, num_cols_orig) {
+  #Check if the window goes beyond the size of bird_pop.am or bird_pop.pm
+  if ((x[i]-window_radius)>=1) {
+    #lb_x_in = TRUE #lower bound within bird_pop
+    start_x=1
+  } else {
+    #lb_x_in = FALSE #lower bound outside
+    start_x=(nrow(window_movements)-(up_x[i]-lb_x[i]))
+  }
+  
+  #Do same for y dimension
+  if ((y[i]-window_radius)>=1) {
+    #lb_y_in = TRUE
+    start_y=1
+  } else {
+    #lb_y_in = FALSE
+    start_y=(ncol(window_movements)-(up_y[i]-lb_y[i]))
+  }
+  
+  #Check upper bounds
+  if ((x[i]+window_radius)<=num_rows_orig) {
+    #up_x_in = TRUE
+    end_x=nrow(window_movements)
+  }  else {
+    #up_x_in = FALSE
+    end_x=(up_x[i]-lb_x[i]+1)
+  }
+  
+  if ((y[i]+window_radius)<=num_cols_orig) {
+    #up_y_in = TRUE
+    end_y=ncol(window_movements)
+  }  else {
+    #up_y_in = FALSE
+    end_y=(up_y[i]-lb_y[i]+1)
+  }
+  return(list(start_x, end_x, start_y, end_y))
+}
+
 
 #d=1
 #Loop over days and nodes
