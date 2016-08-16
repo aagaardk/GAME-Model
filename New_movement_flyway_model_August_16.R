@@ -21,7 +21,7 @@ rm(list=ls())
 
 #Set working directory
 # #For Sarah:
-setwd("~/IDriveSync/IWMM/migration_model")
+setwd("~/IDriveSync/IWMMGit/migration_model")
 
 # #For Kevin
 #work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
