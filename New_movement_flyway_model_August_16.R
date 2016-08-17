@@ -21,7 +21,7 @@ rm(list=ls())
 
 #Set working directory
 # #For Sarah:
-setwd("~/IDriveSync/IWMMGit/migration_model")
+setwd("~/IDriveSync/IWMMGit/inputs")
 
 # #For Kevin
 #work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
@@ -38,6 +38,7 @@ library(maptools)
 library(data.table)
 library(plyr)
 library(foreign)
+library(dplyr)
 
 require(data.table)
 
@@ -614,7 +615,7 @@ WSI.cutoff = 7.5
 #Outputs: new.bc.bin (discrete bin in which resulting body condition falls)
 #        
 ######################################################################
-new_body_condition <- function(body_conditions, new.bc) {
+new_body_condition <- function(body_conditions, bcvector) {
   if (new.bc > max(body_conditions[,2])) {
     new.bc.bin = nrow(body_conditions)
   } else if (new.bc < min(body_conditions[1])) {
@@ -627,6 +628,15 @@ new_body_condition <- function(body_conditions, new.bc) {
   return(new.bc.bin)
 } 
 
+new_bc_vector <- function(body_conditions, bcvector) {
+  which(bcvector>max(body_conditions[,2]))
+}
+
+getNewBC <- function(bcvector, body_conditions) {
+  tmp <- body_conditions %>%
+    filter(body_conditions[,1]<= bcvector, bcvector >= body_conditions[,2])
+  return (row_number())
+}
 #######################################################################
 #Function Name: bc_to_loop
 #Purpose: used to loop over "to" body conditions. Calculates how many
@@ -708,68 +718,68 @@ window_setup <- function(A, B, C, D, E) {
 
 #From body condition loop function
 bc_from_loop <- function(bird_cond) {
-     
-    #Check that there are birds in the current body condition
-    if (bird_pop.am[d,x[i],y[i],body_cond]>0){
+  
+  #Check that there are birds in the current body condition
+  if (bird_pop.am[d,x[i],y[i],body_cond]>0){
+    
+    #Assume the birds at the beginning of the day forage for the day. Then decide to stay or leave at night
+    
+    #Determine new body condition based on daily gain
+    new.bc = body_conditions[body_cond,3]+DG.matrix.full[focal_node_x[i],focal_node_y[i]]
+    
+    #Figure out which bin the new body condition is in
+    new.bc.bin=new_body_condition(body_conditions, new.bc)
+    
+    #Compute landscape energetics required to fuel birds:
+    #Convert grams to kJ using 37 kJ/g lipids
+    energy_needed = DG.matrix.full[focal_node_x[i],focal_node_y[i]]*
+      bird_pop.am[d,x[i],y[i],body_cond]*37
+    
+    #keep summing energy_need over body conditions
+    energy_needed.total = energy_needed.total+energy_needed
+    
+    #Surviving birds at end of the day of foraging.
+    #mult am birds by energy_needed/available forage and daily survival
+    #if available forage exceeds energy needed, birds removed only due to daily survival
+    #otherwise, only proportion of birds that can use available forage stay
+    
+    bird_pop.pm[d,x[i],y[i],new.bc.bin]=bird_pop.am[d,x[i],y[i],body_cond]*
+      ifelse(forage.by.day[focal_node_x[i],focal_node_y[i],d]==0,0, 
+             max(1,energy_needed/forage.by.day[focal_node_x[i],focal_node_y[i],d], na.rm=TRUE))*daily_survival[body_cond,1]
+    
+    #Reduce forage for next body conditions of birds
+    forage.by.day[focal_node_x[i],focal_node_y[i],d] = max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed))
+    
+    #Compute probabily of departing
+    prob_depart = weight.WSI*prob_depart.WSI[focal_node_x[i],focal_node_y[i],d]+weight.BC*(body_cond^8/(body_cond^8+17^8))
+    
+    #Generate a random 0-1 and see if it is below the prob_depart.  If so, birds leave.  Else, birds stay
+    if (runif(1)<prob_depart) { 
+      #Birds leave
+      #Move birds according to window_movements and body_change_logical
       
-      #Assume the birds at the beginning of the day forage for the day. Then decide to stay or leave at night
+      #Compute pm.by.movements as product of pm birds and window_movments
+      pm.by.movements=bird_pop.pm[d,x[i],y[i],new.bc.bin]*window_movements
       
-      #Determine new body condition based on daily gain
-      new.bc = body_conditions[body_cond,3]+DG.matrix.full[focal_node_x[i],focal_node_y[i]]
-      
-      #Figure out which bin the new body condition is in
-      new.bc.bin=new_body_condition(body_conditions, new.bc)
-      
-      #Compute landscape energetics required to fuel birds:
-      #Convert grams to kJ using 37 kJ/g lipids
-      energy_needed = DG.matrix.full[focal_node_x[i],focal_node_y[i]]*
-        bird_pop.am[d,x[i],y[i],body_cond]*37
-      
-      #keep summing energy_need over body conditions
-      energy_needed.total = energy_needed.total+energy_needed
-      
-      #Surviving birds at end of the day of foraging.
-      #mult am birds by energy_needed/available forage and daily survival
-      #if available forage exceeds energy needed, birds removed only due to daily survival
-      #otherwise, only proportion of birds that can use available forage stay
-      
-      bird_pop.pm[d,x[i],y[i],new.bc.bin]=bird_pop.am[d,x[i],y[i],body_cond]*
-        ifelse(forage.by.day[focal_node_x[i],focal_node_y[i],d]==0,0, 
-               max(1,energy_needed/forage.by.day[focal_node_x[i],focal_node_y[i],d], na.rm=TRUE))*daily_survival[body_cond,1]
-      
-      #Reduce forage for next body conditions of birds
-      forage.by.day[focal_node_x[i],focal_node_y[i],d] = max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed))
-      
-      #Compute probabily of departing
-      prob_depart = weight.WSI*prob_depart.WSI[focal_node_x[i],focal_node_y[i],d]+weight.BC*(body_cond^8/(body_cond^8+17^8))
-      
-      #Generate a random 0-1 and see if it is below the prob_depart.  If so, birds leave.  Else, birds stay
-      if (runif(1)<prob_depart) { 
-        #Birds leave
-        #Move birds according to window_movements and body_change_logical
-        
-        #Compute pm.by.movements as product of pm birds and window_movments
-        pm.by.movements=bird_pop.pm[d,x[i],y[i],new.bc.bin]*window_movements
-        
-        #use sapply to compute number of birds that end up in each "to" body condition:
-        bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], ]= 
-          sapply(seq_len(body_condition_bins),bc_to_loop, pm.by.movements=pm.by.movements,body_change_logical=
-                   body_change_logical,new.bc.bin=new.bc.bin, bp.am=bird_pop.am[d+1,lb_x[i]:up_x[i],lb_y[i]:up_y[i],], 
-                 start_x=lb_x_small[i], end_x=up_x_small[i], start_y=lb_y_small[i], end_y=up_y_small[i], simplify="array")
-        
-        
-      } else {# if loop
-        
-        #Move all pm birds to next day am
-        bird_pop.am[d+1,x[i],y[i],new.bc.bin]=bird_pop.pm[d,x[i],y[i],new.bc.bin]
-      }
-      
-      #Any other case in which birds leave?  In prototype, they leave if they are in highest body condition class
+      #use sapply to compute number of birds that end up in each "to" body condition:
+      bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], ]= 
+        sapply(seq_len(body_condition_bins),bc_to_loop, pm.by.movements=pm.by.movements,body_change_logical=
+                 body_change_logical,new.bc.bin=new.bc.bin, bp.am=bird_pop.am[d+1,lb_x[i]:up_x[i],lb_y[i]:up_y[i],], 
+               start_x=lb_x_small[i], end_x=up_x_small[i], start_y=lb_y_small[i], end_y=up_y_small[i], simplify="array")
       
       
-    } #else loop
+    } else {# if loop
+      
+      #Move all pm birds to next day am
+      bird_pop.am[d+1,x[i],y[i],new.bc.bin]=bird_pop.pm[d,x[i],y[i],new.bc.bin]
+    }
+    
+    #Any other case in which birds leave?  In prototype, they leave if they are in highest body condition class
+    
+    
+  } #else loop
   return(list(energy_needed.total, bird_pop.pm, forage.by.day, bird_pop.am))
-
+  
 }
 
 #####################################################################
@@ -779,93 +789,100 @@ bc_from_loop <- function(bird_cond) {
 #Loop over days and nodes
 #for (d in 1:num_days) {  #Number of days of WSI data
 Rprof("ForLoop.out",memory.profiling=FALSE)
+start.time = Sys.time()
 for (d in 1:2) {
   timeit<-proc.time()
+  start.time=Sys.time()
   for (i in 1:nrow(data_nodes) ) { #Loop through data nodes
     
     #Check if there are birds in the node at the start of the day  
     if (sum(bird_pop.am[d,focal_node_x[i]-window_radius,focal_node_y[i]-window_radius,],na.rm=TRUE) >0 ) {
       #There are birds in the node. 
       window_movements = window_setup(forage.by.day, roosting.matrix.full, distance_to_breed.matrix.full, distance_to_arrival, WSI.array)
-     
+      
       energy_needed.total=0 #clear out energy needed.  add up as loop goes
       
-      #Loop over body conditions      
-      for (body_cond in 1:body_condition_bins) { 
-#         outputs = bc_from_loop(body_cond)  
-#         
-#         energy_needed.total = outputs[[1]]
-#         bird_pop.pm = outputs[[2]]
-#         forage.by.day = outputs[[3]]
-#         bird_pop.am = outputs[[4]]
-        #Check that there are birds in the current body condition
-        if (bird_pop.am[d,x[i],y[i],body_cond]>0){
-          
-          #Assume the birds at the beginning of the day forage for the day. Then decide to stay or leave at night
-          
-          #Determine new body condition based on daily gain
-          new.bc = body_conditions[body_cond,3]+DG.matrix.full[focal_node_x[i],focal_node_y[i]]
-          
-          #Figure out which bin the new body condition is in
-          new.bc.bin=new_body_condition(body_conditions, new.bc)
-          
-          #Compute landscape energetics required to fuel birds:
-          #Convert grams to kJ using 37 kJ/g lipids
-          energy_needed = DG.matrix.full[focal_node_x[i],focal_node_y[i]]*
-            bird_pop.am[d,x[i],y[i],body_cond]*37
-          
-          #keep summing energy_need over body conditions
-          energy_needed.total = energy_needed.total+energy_needed
-          
-          #Surviving birds at end of the day of foraging.
-          #mult am birds by energy_needed/available forage and daily survival
-          #if available forage exceeds energy needed, birds removed only due to daily survival
-          #otherwise, only proportion of birds that can use available forage stay
-          
-          bird_pop.pm[d,x[i],y[i],new.bc.bin]=bird_pop.am[d,x[i],y[i],body_cond]*
-            ifelse(forage.by.day[focal_node_x[i],focal_node_y[i],d]==0,0, 
-                   max(1,energy_needed/forage.by.day[focal_node_x[i],focal_node_y[i],d], na.rm=TRUE))*daily_survival[body_cond,1]
-          
-          #Reduce forage for next body conditions of birds
-          forage.by.day[focal_node_x[i],focal_node_y[i],d] = max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed))
-          
-          #Compute probabily of departing
-          prob_depart = weight.WSI*prob_depart.WSI[focal_node_x[i],focal_node_y[i],d]+weight.BC*(body_cond^8/(body_cond^8+17^8))
-          
-          #Generate a random 0-1 and see if it is below the prob_depart.  If so, birds leave.  Else, birds stay
-          if (runif(1)<prob_depart) { 
-            #Birds leave
-            #Move birds according to window_movements and body_change_logical
-            
-            #Compute pm.by.movements as product of pm birds and window_movments
-            pm.by.movements=bird_pop.pm[d,x[i],y[i],new.bc.bin]*window_movements
-            
-            #use sapply to compute number of birds that end up in each "to" body condition:
-            bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], ]= 
-              sapply(seq_len(body_condition_bins),bc_to_loop, pm.by.movements=pm.by.movements,body_change_logical=
-                       body_change_logical,new.bc.bin=new.bc.bin, bp.am=bird_pop.am[d+1,lb_x[i]:up_x[i],lb_y[i]:up_y[i],], 
-                       start_x=lb_x_small[i], end_x=up_x_small[i], start_y=lb_y_small[i], end_y=up_y_small[i], simplify="array")
-            
-            
-          } else {# if loop
-            
-            #Move all pm birds to next day am
-            bird_pop.am[d+1,x[i],y[i],new.bc.bin]=bird_pop.pm[d,x[i],y[i],new.bc.bin]
-          }
-          
-          #Any other case in which birds leave?  In prototype, they leave if they are in highest body condition class
-          
-          
-        } #else loop
-      } #for loop
-      #reduce the forage on the next day by amount of energy_needed
-      forage.by.day[focal_node_x[i],focal_node_y[i],d+1]=max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed.total))
-    } #if loop
-  } #i loop
-  time.it.took=proc.time()-timeit
-  print("d=")
-  print(d)
-  print(time.it.took)
+      #Loop over body conditions  
+      ### August 16, 2016 - Trying to vectorize this section
+      
+     
+      #compute new body condition due to daily gain
+      bcvector<- (body_conditions[,3]+DG.matrix.full[focal_node_x[i],focal_node_y[i]])
+      
+      #determine which bin the new body condition falls in
+      new.bc.bin = findInterval(bcvector, body_conditions[,1])
+      
+      #Compute landscape energetics required to fuel birds:
+      #Convert grams to kJ using 37 kJ/g lipids
+      energy_needed = DG.matrix.full[focal_node_x[i],focal_node_y[i]]*
+        bird_pop.am[d,x[i],y[i],]*37
+      
+      #keep summing energy_need over body conditions
+      energy_needed.total = energy_needed.total+sum(energy_needed)
+      
+      #Surviving birds at end of the day of foraging.
+      #mult am birds by energy_needed/available forage and daily survival
+      #if available forage exceeds energy needed, birds removed only due to daily survival
+      #otherwise, only proportion of birds that can use available forage stay
+      
+      PMPop = bird_pop.am[d,x[i],y[i],]*ifelse(forage.by.day[focal_node_x[i],focal_node_y[i],d]==0,0, 
+                                               max(1,energy_needed/forage.by.day[focal_node_x[i],focal_node_y[i],d], na.rm=TRUE))*daily_survival[,1]
+      BPAgg = aggregate(cbind(PMPop,new.bc.bin), by=list(new.bc.bin), FUN=sum)
+      bird_pop.pm[d,x[i],y[i],BPAgg[,1]] = BPAgg[,2]
+      
+      #bird_pop.pm[d,x[i],y[i],new.bc.bin]=bird_pop.am[d,x[i],y[i],body_cond]*
+      #     ifelse(forage.by.day[focal_node_x[i],focal_node_y[i],d]==0,0, 
+      #           max(1,energy_needed/forage.by.day[focal_node_x[i],focal_node_y[i],d], na.rm=TRUE))*daily_survival[body_cond,1]
+      
+      #Reduce forage for next body conditions of birds
+      forage.by.day[focal_node_x[i],focal_node_y[i],d] = max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed))
+      
+      #Compute probabily of departing
+      prob_depart = weight.WSI*prob_depart.WSI[focal_node_x[i],focal_node_y[i],d]+weight.BC*(seq(1:body_condition_bins)^8/(seq(1:body_condition_bins)^8+17^8))
+      
+      #Generate a random 0-1 and see if it is below the prob_depart.  If so, birds leave.  Else, birds stay
+      #leave is a vector of indices describing which body condition classes will leave
+      leave = which(runif(body_condition_bins)<prob_depart)  
+      stay = setdiff(seq(1:body_condition_bins),leave)
+      
+      #For each body condition class that leaves
+      #Move birds according to window_movements and body_change_logical
+      
+      #These two lines are equivalent. The first uses apply functions. The second uses a loop and apply
+      
+      
+      #Compute pm.by.movements as product of pm birds and window_movments
+     #bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], ] = apply(sapply(leave, function(bc.to) sapply(seq_len(body_condition_bins),bc_to_loop, pm.by.movements=bird_pop.pm[d,x[i],y[i],bc.to]*window_movements,body_change_logical=
+                                                                                     #                body_change_logical,new.bc.bin=bc.to, bp.am=bird_pop.am[d+1,lb_x[i]:up_x[i],lb_y[i]:up_y[i],], 
+                                                                                      #                start_x=lb_x_small[i], end_x=up_x_small[i], start_y=lb_y_small[i], end_y=up_y_small[i], simplify="array"), simplify = "array" ),1:3, sum, na.rm=TRUE)
+      #use sapply to compute number of birds that end up in each "to" body condition:
+      #This formulation is faster than one above
+        for (bc.to in leave) {
+          pm.by.movements = bird_pop.pm[d,x[i],y[i],bc.to]*window_movements
+          bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], ]= bird_pop.am[d+1,lb_x[i]:up_x[i], lb_y[i]:up_y[i], ]+
+            sapply(seq_len(body_condition_bins),bc_to_loop, pm.by.movements=pm.by.movements,body_change_logical=
+                     body_change_logical,new.bc.bin=bc.to, bp.am=bird_pop.am[d+1,lb_x[i]:up_x[i],lb_y[i]:up_y[i],], 
+                   start_x=lb_x_small[i], end_x=up_x_small[i], start_y=lb_y_small[i], end_y=up_y_small[i], simplify="array")
+        }
+      
+      # pm.by.movements=bird_pop.pm[d,x[i],y[i],]*window_movements
+      
+      #If birds didn't leave, move all pm birds to next day am
+      bird_pop.am[d+1,x[i],y[i],stay]=bird_pop.am[d+1,x[i],y[i],stay]+bird_pop.pm[d,x[i],y[i],stay]
+      
+    } #else loop
+  } #for loop
+  #reduce the forage on the next day by amount of energy_needed
+  forage.by.day[focal_node_x[i],focal_node_y[i],d+1]=max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed.total))
+} #if loop
+time.take=Sys.time()-start.time
+time.take
+
+} #i loop
+time.it.took=proc.time()-timeit
+print("d=")
+print(d)
+print(time.it.took)
 } # d loop
 summaryRprof("ForLoop.out")
 
