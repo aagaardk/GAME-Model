@@ -874,16 +874,11 @@ for (d in 1:2) {
   } #for loop
   #reduce the forage on the next day by amount of energy_needed
   forage.by.day[focal_node_x[i],focal_node_y[i],d+1]=max(0,(forage.by.day[focal_node_x[i],focal_node_y[i],d]-energy_needed.total))
-} #if loop
 time.take=Sys.time()-start.time
 time.take
-
-} #i loop
-time.it.took=proc.time()-timeit
-print("d=")
 print(d)
-print(time.it.took)
-} # d loop
+} #d loop
+#} # d loop
 summaryRprof("ForLoop.out")
 
 bird_pop.am.sum=apply(bird_pop.am,1:3,sum, na.rm=TRUE)
