@@ -15,6 +15,7 @@ Sys.time()
 ######################################################################
 
 # This script is used to gather the necessary data for the flyway model.
+# Vicky will now work on this version to implement data table improvements.
 
 #Clear the workspace
 rm(list=ls())
