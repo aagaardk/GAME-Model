@@ -21,15 +21,15 @@ rm(list=ls())
 
 #Set working directory
 # #For Sarah:
-# setwd("~/IDriveSync/IWMMGit/inputs")
+ setwd("~/IDriveSync/IWMMGit/inputs")
 
 #For Kevin
-.libPaths("C:/R-3.3.1/library")
-work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
-                    "IWMM Efforts","Flyway Model Project","Modelling",
-                    "Scripts and data")
-setwd(work_dir)
-setwd(paste(getwd(),'/R',sep=''))
+#.libPaths("C:/R-3.3.1/library")
+#work_dir = file.path("//Igsarfebfslacr3","Users","kaagaard","My Documents",
+   #                 "IWMM Efforts","Flyway Model Project","Modelling",
+  #                  "Scripts and data")
+#setwd(work_dir)
+#setwd(paste(getwd(),'/R',sep=''))
 
 #Include necessary libraries
 library(compiler)
@@ -119,7 +119,7 @@ NODE_DATA$cals_sum<-rowSums(cals_by_cover)*33945 #Use this total number of kcal 
 # We should really just change the root file name to remove the extra 'e'.
 # Also, the double periods before the 'dbf' throw and error for me. Also
 # probably a file name issue.
-S<- read.dbf("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join.dbf") #much faster to read in
+S<- read.dbf("NorthAmeerica_20mi_grid_wAK_BPOP_NSmallard_join..dbf") #much faster to read in
 
 #Put Shape data into temp variable.  Note that Natureserve = 3 is non-breeding only; 2 is breeding only
 tempS <- data.frame(S$ID, S$Y_INDEX, S$X_INDEX, S$NORMPOP, S$COUNT, S$Natureserv)
@@ -560,20 +560,30 @@ W3 = .25
 W4 = .25
 
 #Limit loops by only grabbing nodes with data
-data_nodes = which(!is.na(roosting.matrix.full),TRUE)
+#data_nodes = which(!is.na(roosting.matrix.full),TRUE)
+
+library(reshape2)
+
+#Trying out datatable
+input.dt <- data.table(melt(roosting.matrix.full))
+colnames(input.dt) = c('xindex','yindex','roosting')
+input.dt$DG <- melt(DG.matrix.full)[,3]
+input.dt$DistBreed <-melt(distance_to_breed.matrix.full)[,3]
+
+data_nodes = input.dt[which(!is.na(input.dt$roosting),TRUE),1:2, with=FALSE]
+
 
 #remove items not needed to reduce memory
 
-rm(list= ls()[!(ls() %in% c('init_birds.matrix','num_rows_orig', 'num_cols_orig','num_days','roosting.matrix','data_nodes','window_radius','bird_pop.am','forage.by.day','roosting.matrix.full',
-                            'distance_to_breed.matrix.full', 'WSI.array', 'distance_to_arrival','W1', 'W2', 'W3', 'W4','body_condition_bins',
-                            'DG.matrix.full', 'weight.WSI', 'prob_depart.WSI', 'daily_survival', 'weight.BC', 'bird_pop.pm','body_conditions','body_change_logical'))])
+rm(list= ls()[!(ls() %in% c('init_birds.matrix','num_rows_orig', 'num_cols_orig','num_days','roosting.matrix','data_nodes','window_radius','bird_pop.am','forage.by.day', 'WSI.array', 'distance_to_arrival','W1', 'W2', 'W3', 'W4','body_condition_bins',
+                            'input.dt', 'weight.WSI', 'prob_depart.WSI', 'daily_survival', 'weight.BC', 'bird_pop.pm','body_conditions','body_change_logical'))])
 gc()
 
 #Pre-determine the windows around each possible focal node.
 
 #Grad x any y indices of any node with data (not NA)
-focal_node_x =data_nodes[,1]
-focal_node_y=data_nodes[,2]
+focal_node_x =data_nodes$xindex
+focal_node_y=data_nodes$yindex
 
 #Used to convert to correct indices based on padding of zeros
 x = focal_node_x-window_radius
@@ -726,7 +736,9 @@ bc_from_loop <- function(bird_cond) {
     #Assume the birds at the beginning of the day forage for the day. Then decide to stay or leave at night
     
     #Determine new body condition based on daily gain
-    new.bc = body_conditions[body_cond,3]+DG.matrix.full[focal_node_x[i],focal_node_y[i]]
+    
+    #new.bc = body_conditions[body_cond,3]+DG.matrix.full[focal_node_x[i],focal_node_y[i]]
+    new.bc = body_conditions[body_cond,3]+input.dt$DG[input.dt$xindex==focal_node_x[i] & input.dt$yindex==focal_node_y[i]]
     
     #Figure out which bin the new body condition is in
     new.bc.bin=new_body_condition(body_conditions, new.bc)
