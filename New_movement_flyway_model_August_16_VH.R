@@ -1,5 +1,5 @@
 #######################################################################
-# vicky is Testing 2016.10.12
+# vicky is Testing 2016.10.24
 # Main Migration Wrapper
 #---------------------------------------------------------------------------------------
 #
@@ -9,7 +9,7 @@
 #
 # Modified:  
 Sys.time()
-# By: Sarah Jacobi - adding new speed ups and cleaning up code. Trying to push.
+# By: Vicky - adding new speed ups and cleaning up code. Trying to push.
 #
 # Create necessary inputs used in the movement script
 ######################################################################
@@ -21,7 +21,7 @@ rm(list=ls())
 
 #Set working directory
 # #For Sarah:
- setwd("~/IDriveSync/IWMMGit/inputs")
+ #setwd("~/IDriveSync/IWMMGit/inputs")
 
 #For Kevin
 #.libPaths("C:/R-3.3.1/library")
@@ -30,6 +30,11 @@ rm(list=ls())
   #                  "Scripts and data")
 #setwd(work_dir)
 #setwd(paste(getwd(),'/R',sep=''))
+
+#Set working directory
+# #For Vicky:
+codeDataDir<- "C://Users/Vicky/Documents/iwmm/migration_model"
+setwd(codeDataDir)
 
 #Include necessary libraries
 library(compiler)
@@ -50,8 +55,10 @@ timeit<-proc.time()
 options(digits=16)
 
 # First, read in the node data from NA_NODE_LC2.csv
-NODE_DATA <- fread("NA_NODE_LC2.txt")
-NODE_DATA = data.frame(NODE_DATA)
+NODE_DATA.raw <- fread("NA_NODE_LC2.txt")
+NODE_DATA.t = data.table(NODE_DATA.raw)
+NODE_DATA = data.frame(NODE_DATA.raw)
+setkey(NODE_DATA.t,FID,Y_INDEX,X_INDEX)
 
 # These are the columns in NODE_DATA:
 # 1:FID; 2:Y-index; 3:X-index; 4:code; 5:long; 6:lat; 7:shoreline; 8: open
@@ -62,13 +69,17 @@ NODE_DATA = data.frame(NODE_DATA)
 # 26:herb wetlands; 27:mean dist to crops; 28:std to crops; 29:mean woody
 # wet; 30:std wood wet; 31:mean herb wet; 32:std herb wet
 
-# Determine number of nodes
+# Determine number of nodes data.frame (same as data.table)
 num_nodes <- nrow(NODE_DATA)
 
-#Rename columns to make it easier to reference them
+
+#Rename columns to make it easier to reference them (dataframe)
 setnames(NODE_DATA, old= c("VALUE_1", "VALUE_82" ,"VALUE_90","VALUE_95", "MEAN_82", "MEAN_90", "MEAN_95", "STD_82", "STD_90" ,"STD_95"),
          new=c("Shoreline", "Crops", "Woody_wet","Herb_wet", "Mean_crops","Mean_woody_wet","Mean_herb_wet", "STD_Crops","STD_woody_wet", "STD_herb_wet"))
 
+#Rename columns to make it easier to reference them (data table)
+setnames(NODE_DATA.t, old= c("VALUE_1", "VALUE_82" ,"VALUE_90","VALUE_95", "MEAN_82", "MEAN_90", "MEAN_95", "STD_82", "STD_90" ,"STD_95"),
+         new=c("Shoreline", "Crops", "Woody_wet","Herb_wet", "Mean_crops","Mean_woody_wet","Mean_herb_wet", "STD_Crops","STD_woody_wet", "STD_herb_wet"))
 
 #Set node size in miles
 node_size = 20 
@@ -85,6 +96,7 @@ num_land_cover_class= 3 #number of land cover classes currently analyzed
 
 #set up matrix to hold habitat data
 hab_dist <- matrix(0,num_nodes,num_land_cover_class)
+hab_dist.t <- matrix(0,num_nodes,num_land_cover_class)
 
 # Incorporate distance effects. Create normal distribution using mean and stdev dist to cover
 hab_dist[,1]<-pnorm(node_move,NODE_DATA[,"Mean_crops"],sapply(NODE_DATA[,"STD_Crops"], function(x) max(x,30)))
@@ -94,14 +106,49 @@ hab_dist[which(NODE_DATA[,"Crops"]==0),1]<-0
 hab_dist[which(NODE_DATA[,"Woody_wet"]==0),2]<-0
 hab_dist[which(NODE_DATA[,"Herb_wet"]==0),3]<-0
 
+
+#remove quotes for a data.table
+hab_dist.t[,1]<-pnorm(node_move,NODE_DATA.t[,Mean_crops],sapply(NODE_DATA.t[,STD_Crops], function(x) max(x,30)))
+hab_dist.t[,2]<-pnorm(node_move,NODE_DATA.t[,Mean_woody_wet],sapply(NODE_DATA.t[,STD_woody_wet], function(x) max(x,30)))
+hab_dist.t[,3]<-pnorm(node_move,NODE_DATA.t[,Mean_herb_wet],sapply(NODE_DATA.t[,STD_herb_wet], function(x) max(x,30)))
+hab_dist.t[which(NODE_DATA.t[,Crops]==0),1]<-0
+hab_dist.t[which(NODE_DATA.t[,Woody_wet]==0),2]<-0
+hab_dist.t[which(NODE_DATA.t[,Herb_wet]==0),3]<-0
+
+identical(hab_dist.t, hab_dist) #TRUE - these are the same
+
 #Grab Y_INDEX and X_INDEX
 coords <- NODE_DATA[,2:3]
+coords.1 <- cbind(NODE_DATA[,"Y_INDEX"], NODE_DATA[,"X_INDEX"])
+names(coords.1)<-c("Y_INDEX","X_INDEX")
+
+coords[1:2,]
+coords.1[1:2,]
+
+coords.t <- NODE_DATA.t[,"Y_INDEX":"X_INDEX"]
+names(coords.t)<-c("Y_INDEX","X_INDEX")
+setnames(coords.t,1,"Y_INDEX")
+typeof(coords.1)
+coords[1:3,]
+coords.t[1:3,]
+identical(coords.t, coords) #TRUE - these are the same
 
 #Grab FID, Y_INDEX, X_INDEX, Shoreline, crops, woody wet and herb wet. Mult by cum. norm value
-bird_hab <- cbind(NODE_DATA[1:6],as.numeric(NODE_DATA[,"Shoreline"]),NODE_DATA[,names(NODE_DATA) %in% c("Crops","Woody_wet","Herb_wet")]*hab_dist) 
+bird_hab <- cbind(NODE_DATA[,1,with=FALSE],
+                  NODE_DATA[,2,with=FALSE],
+                  NODE_DATA[,3,with=FALSE],
+                  NODE_DATA[,4,with=FALSE],
+                  NODE_DATA[,5,with=FALSE],
+                  NODE_DATA[,6,with=FALSE],
+                  as.numeric(NODE_DATA[,Shoreline]),
+                  NODE_DATA[,Crops]*hab_dist,
+                  NODE_DATA[,Woody_wet]*hab_dist,
+                  NODE_DATA[,Herb_wet]*hab_dist) 
 
 #Rename columns
 setnames(bird_hab,c("as.numeric(NODE_DATA[, \"Shoreline\"])"),c("Shoreline"))
+bird_hab
+
 
 rm(hab_dist) #remove unneeded data
 bird_hab[,7:10] <- bird_hab[,7:10]/900 #Data is in square meters.  Covert to pixels
@@ -119,7 +166,8 @@ NODE_DATA$cals_sum<-rowSums(cals_by_cover)*33945 #Use this total number of kcal 
 # We should really just change the root file name to remove the extra 'e'.
 # Also, the double periods before the 'dbf' throw and error for me. Also
 # probably a file name issue.
-S<- read.dbf("NorthAmeerica_20mi_grid_wAK_BPOP_NSmallard_join..dbf") #much faster to read in
+#2016.10.12 fixing Ameerica --> america, and removing second double period
+S<- read.dbf("NorthAmerica_20mi_grid_wAK_BPOP_NSmallard_join.dbf") #much faster to read in
 
 #Put Shape data into temp variable.  Note that Natureserve = 3 is non-breeding only; 2 is breeding only
 tempS <- data.frame(S$ID, S$Y_INDEX, S$X_INDEX, S$NORMPOP, S$COUNT, S$Natureserv)
@@ -171,7 +219,7 @@ gc()
 num_nodes <<- nrow(NODE_DATA)
 
 #Grab node id, long, lat
-mtxNode <- data.frame(NODE_DATA[,1],NODE_DATA[,5],NODE_DATA[,6])
+mtxNode <- data.frame(NODE_DATA[,FID],NODE_DATA[,Long],NODE_DATA[,Lat])
 
 #subset of mtxNode that are breeding nodes
 mtxBreedNodes <- NODE_DATA_breed[which(NODE_DATA_breed[,newcol2]==2),.(FID,Long,Lat)]
@@ -236,7 +284,10 @@ distance_to_breed_nodes <- rdist(mtxNode[,2:3],mtxBreedNodes[,2:3,with=FALSE])
 rm(mtxNode,mtxBreedNodes)
 
 #Determine distance to nearest breeding node
+sys.time1 <-Sys.time()
 distance_to_breed <-as.matrix(apply(distance_to_breed_nodes,1,min))
+sys.time2<-Sys.time()
+sys.time2-sys.time1 #12.64139604568481 secs with data.frame
 
 #Garbage collector
 gc()
