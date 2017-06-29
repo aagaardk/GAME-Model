@@ -131,6 +131,12 @@ node_populace = function(x) which(x>quantile(x,probs=0.98))
 NODE_DATA = fread("NodeSpecifData.txt")
 setkey(NODE_DATA,Code,ID,Y_INDEX,X_INDEX,Longitude,Latitude)
 
+NODE_DATA[,`:=`(
+  NormRoostShoreline = RoostShoreline/ sum(RoostShoreline),
+  NormDistBreed = (max(DistBreed) - DistBreed) /
+    sum(max(DistBreed) - DistBreed)
+)]
+
 N_0 = NODE_DATA[,sum(N_Abund_0)]
 
 # Determine number of nodes
@@ -148,9 +154,9 @@ beta_mean_body_mass = mean(c(mean_body_mass,max_body_mass))
 a=10
 b=1.5
 
-body_mas_pop = N_0
-#body_mas_pop = 10000
-body_mass = rbeta(body_mas_pop,a,b) * beta_mean_body_mass
+body_mass_pop = N_0
+#body_mass_pop = 10000
+body_mass = rbeta(body_mass_pop,a,b) * beta_mean_body_mass
 range(body_mass)
 body_mass = body_mass[body_mass > min_body_mass]
 
@@ -414,95 +420,85 @@ body_mass = body_mass[body_mass > min_body_mass]
 }
 
 # Create node-specific daily gain layers ----------------------------------
-# # # THIS ONLY NEEDS TO BE RUN TO IDENTIFY THE RELATION; ONCE FOUND, NO NEED
-# # # TO UNCOMMENT THIS
-# # #
-# # # Calculate factor by which to multiply base 1 gram Temperature Dependent
-# # # BMR by. That is, to calculate the temperature-dependent daily gain for
-# # # a 1.14 kilogram bird, multiply the TDBMR by the output of
-# # # `TD_DG_BodyMass_Relation(1.14)`.
-# #
-# # # Calculate temperature dependent BMR for 1 gram
-# # BodyMass = 0.001
-# # # Energy loss functions
-# # # BMR in kJ, Heitmeyer 2010
-# # BasalMetRate = 422 * (BodyMass^0.74)
-# #
-# # BodyMass = c(0.001,seq(round(range(body_mass)[1]/1000,1),
-# #                        round(range(body_mass)[2]/1000,1),(1/1000)))
-# # BasalMetRate = 422 * (BodyMass^0.74)
-# #
-# # temperaturerange=c(-60:31)
-# #
-# # TDBMR=vector("list")
-# # for(i in 1:length(BodyMass)){
-# #   TDBMR[[i]] =
-# #     (((2.06 - (0.03 * temperaturerange)) * kckJConv) *
-# #        BasalMetRate[i]) ^ (temperaturerange<LowCritTemp) *
-# #     (BasalMetRate[i] ^ (temperaturerange>=LowCritTemp))
-# # }
-# #
-# # # Energy gain function
-# # # Energy gain functions; 9 kcal/g, Ricklefs 1974 via Whyte and Bolen 1988
-# # # MeanDailyMassIncrease = 4 #g, Hanson et al. 1990
-# # # RWB_coeff = MeanDailyMassIncrease * (9 * kckJConv)
-# # #
-# # # LK_coeff = 4.6              #Lindstrom and Kvist 1995; passerines
-# # # KL_coeff = runif(1,3,10)    #Kvist and Lindstrom 2003; waders, ~3-10
-# #
-# # Empir_coeff = 1.8           #range of MetCostLandscape = 1:~2.2XBMR
-# #
-# # # DailyMetabolizableEnergy = RWB_coeff + MetCostLandscape
-# # # DailyMetabolizableEnergy = LK_coeff * BasalMetRate
-# # # DailyMetabolizableEnergy = KL_coeff * BasalMetRate
-# # DailyMetabolizableEnergy = Empir_coeff * BasalMetRate
-# #
-# # HarvestDisturb = 0
-# # FDR = DailyMetabolizableEnergy
-# # HumanDisturb = 0.5
-# # TD_DG=vector("list")
-# # for(i in 1:length(BodyMass)){
-# #   TD_DG[[i]] = ((1-HumanDisturb) * (1-HarvestDisturb) * FDR[i]) -
-# #     TDBMR[[i]]
-# # }
-# #
-# # TD_DG_Change = vector()
-# # for(i in 1:(length(TD_DG)-1)) {
-# #   TD_DG_Change[i] = (TD_DG[[i+1]] / TD_DG[[1]])[1]
-# # }
-# #
-# # TD_DG_BodyMass_Relation_eq=
-# #   nls(TD_DG_Change~a*BodyMass[2:length(BodyMass)]^2 +
-# #         b*BodyMass[2:length(BodyMass)] + c,
-# #       start=list(a=0,b=0,c=1))
-# #
-# # plot(TD_DG_Change~BodyMass[2:length(BodyMass)])
-# # summary(TD_DG_BodyMass_Relation_eq)$parameters
-# #
-# # # TD DG Relation = (-14.80800820381551 * BodyMass^2 +
-# # #                     153.24219961825537 * BodyMass +
-# # #                     27.45433867668212)
-# #
-# # TD_DG_BodyMass_Relation = function(x) {
-# #   (summary(TD_DG_BodyMass_Relation_eq)$parameters[1] * (x ^ 2)) +
-# #     (summary(TD_DG_BodyMass_Relation_eq)$parameters[2] * x) +
-# #     summary(TD_DG_BodyMass_Relation_eq)$parameters[3]
-# # }
-# #
-# # # TD_DG_BodyMass_Relation = function(x) {
-# # #   (-14.80800820381551 * (x ^ 2)) +
-# # #     (153.24219961825537 * x) +
-# # #     27.45433867668212
-# # # }
-# #
-# # # Daily gain is calculated with the inputs:
-# # #   HumanDisturb (Degree of human disturbance--urbanization)
-# # #   HarvestDisturb (Degree of human disturbance--hunter harvest)
-# # #   FDR (Fuel deposition rate, kJ ingested per day)
-# # #   TD_BMR (Temperature dependent basal metabolic rate, kJ per day)
-# #
-# # # DG = (HumanDisturb * HarvestDisturb * FDR) - TD_BMR
-# #
+# THIS ONLY NEEDS TO BE RUN TO IDENTIFY THE RELATION; ONCE FOUND, NO NEED
+# TO UNCOMMENT THIS
+#
+# Calculate factor by which to multiply base 1 gram Temperature Dependent
+# BMR by. That is, to calculate the temperature-dependent daily gain for
+# a 1.14 kilogram bird, multiply the TDBMR by the output of
+# `TD_DG_BodyMass_Relation(1.14)`.
+
+# Calculate temperature dependent BMR for 1 gram
+BodyMass = c(0.001,seq(round(range(body_mass)[1]/1000,1),
+                       round(range(body_mass)[2]/1000,1),(1/1000)))
+# Energy loss functions
+# BMR in kJ, Heitmeyer 2010
+BasalMetRate = 422 * (BodyMass^0.74)
+
+temperaturerange=c(-60:31)
+
+TDBMR=vector("list")
+for(i in 1:length(BodyMass)){
+  TDBMR[[i]] =
+    (((2.06 - (0.03 * temperaturerange)) * kckJConv) *
+       BasalMetRate[i]) ^ (temperaturerange<LowCritTemp) *
+    (BasalMetRate[i] ^ (temperaturerange>=LowCritTemp))
+}
+
+# Energy gain function
+# Energy gain functions; 9 kcal/g, Ricklefs 1974 via Whyte and Bolen 1988
+# MeanDailyMassIncrease = 4 #g, Hanson et al. 1990
+# RWB_coeff = MeanDailyMassIncrease * (9 * kckJConv)
+#
+# LK_coeff = 4.6              #Lindstrom and Kvist 1995; passerines
+KL_coeff = 10               #Kvist and Lindstrom 2003; waders, ~3-10
+
+# Empir_coeff = 1.8           #range of MetCostLandscape = 1:~2.2XBMR
+
+# DailyMetabolizableEnergy = RWB_coeff + MetCostLandscape
+# DailyMetabolizableEnergy = LK_coeff * BasalMetRate
+DailyMetabolizableEnergy = KL_coeff * BasalMetRate
+# DailyMetabolizableEnergy = Empir_coeff * BasalMetRate
+
+HarvestDisturb = 0
+FDR = DailyMetabolizableEnergy
+HumanDisturb = 0.5
+TD_DG=vector("list")
+for(i in 1:length(BodyMass)){
+  TD_DG[[i]] = ((1-HumanDisturb) * (1-HarvestDisturb) * FDR[i]) -
+    TDBMR[[i]]
+}
+
+TD_DG_Change = vector()
+for(i in 1:(length(TD_DG)-1)) {
+  TD_DG_Change[i] = (TD_DG[[i+1]] / TD_DG[[1]])[1]
+}
+
+TD_DG_BodyMass_Relation_eq=
+  nls(TD_DG_Change~a*BodyMass[2:length(BodyMass)]^2 +
+        b*BodyMass[2:length(BodyMass)],
+      start=list(a=0,b=0))
+
+plot(TD_DG_Change~BodyMass[2:length(BodyMass)])
+summary(TD_DG_BodyMass_Relation_eq)$parameters
+
+TD_DG_BodyMass_Relation = function(x) {
+  (summary(TD_DG_BodyMass_Relation_eq)$parameters[1] * ((x/1000) ^ 2)) +
+    (summary(TD_DG_BodyMass_Relation_eq)$parameters[2] * (x/1000))
+}
+
+lines(BodyMass[2:length(BodyMass)],
+      TD_DG_BodyMass_Relation(BodyMass[2:length(BodyMass)]*1000),
+      col="red",lwd=2)
+
+# # Daily gain is calculated with the inputs:
+# #   HumanDisturb (Degree of human disturbance--urbanization)
+# #   HarvestDisturb (Degree of human disturbance--hunter harvest)
+# #   FDR (Fuel deposition rate, kJ ingested per day)
+# #   TD_BMR (Temperature dependent basal metabolic rate, kJ per day)
+# 
+# # DG = (HumanDisturb * HarvestDisturb * FDR) - TD_BMR
+# 
 # # Read in temperature data per node
 # TempData = fread("NorAm_historical_air_temperature_node_info.txt")
 # TempData[,`:=`(Y_INDEX=max(Y_INDEX)+1-Y_INDEX,
@@ -510,14 +506,13 @@ body_mass = body_mass[body_mass > min_body_mass]
 # TempDataFrame = data.frame(TempData)
 # data_columns = colnames(TempDataFrame)
 # 
-# DailyGain_by_day = vector("list")
 # for(i in 1:(length(year_from_record)-1)){
 #   #subset out a particular migration period (don't want to base this on
 #   #calendar year, but rather on annual migratory cycle; i.e., fall one year
 #   #to spring the next)
 #   # 1972 was the most recent "average" (relative to 1951-1980) year,
 #   # differing from the mean during that time span by 0.01 deg C.
-#   target_year = year_from_record
+#   target_year = year_from_record[i]
 #   nonbreeding_year = c(as.character(target_year),
 #                        as.character(target_year+1))
 #   target_dates=c(paste0(nonbreeding_year[1],c("_07_","_08_","_09_","_10_",
@@ -552,14 +547,14 @@ body_mass = body_mass[body_mass > min_body_mass]
 #   # RWB_coeff = MeanDailyMassIncrease * (9 * kckJConv)
 #   #
 #   # LK_coeff = 4.6              #Lindstrom and Kvist 1995; passerines
-#   # KL_coeff = runif(1,3,10)    #Kvist and Lindstrom 2003; waders, ~3-10
+#   KL_coeff = 10               #Kvist and Lindstrom 2003; waders, ~3-10
 # 
-#   Empir_coeff = 1.8           #range of MetCostLandscape = 1:~2.2XBMR
+#   # Empir_coeff = 1.8           #range of MetCostLandscape = 1:~2.2XBMR
 # 
 #   # DailyMetabolizableEnergy = RWB_coeff + MetCostLandscape
 #   # DailyMetabolizableEnergy = LK_coeff * BasalMetRate
-#   # DailyMetabolizableEnergy = KL_coeff * BasalMetRate
-#   DailyMetabolizableEnergy = Empir_coeff * BasalMetRate
+#   DailyMetabolizableEnergy = KL_coeff * BasalMetRate
+#   # DailyMetabolizableEnergy = Empir_coeff * BasalMetRate
 # 
 #   # Metabolic landscape
 #   TargetCols = names(TempDT_NonbreedingPeriod)[
@@ -588,29 +583,11 @@ body_mass = body_mass[body_mass > min_body_mass]
 #                    ((1-HumanDisturb) * (1-HarvestDisturb) * FDR) -
 #                    .SD, .SDcols=InCols]
 # 
-#   DailyGain_by_day[[i]] =
-#     cbind(NODE_DATA_TEMP[,.(ID,Y_INDEX,X_INDEX,Code,Longitude,
-#                             Latitude)],
-#           NODE_DATA_TEMP[,which(names(NODE_DATA_TEMP) %like%
-#                                   "DailyGain"),with=F])
-# 
-#   rm(NODE_DATA_TEMP)
-# 
-#   # fwrite(DailyGain_by_day[[i]],
-#   #        file=paste0("NodeDailyGain",year_from_record[i],".txt"))
+#   fwrite(NODE_DATA_TEMP,
+#          file=paste0("NodeSpecifData_DG",year_from_record[i],".txt"))
+#   
+#   rm(NODE_DATA_TEMP, NODE_DATA)
 # }
-# 
-# # DailyGain_by_day = vector("list")
-# # for(i in 1:(length(year_from_record)-1)){
-# #   DailyGain_by_day[[i]] =
-# #     fread(paste0("NodeDailyGain",year_from_record[i],".txt"))
-# #   setkey(DailyGain_by_day[[i]],Code,ID,Y_INDEX,X_INDEX,Longitude,
-# #          Latitude)
-# #
-# # NODE_DATA = NODE_DATA[DailyGain_by_day[[i]]]
-# # rm(DailyGain_by_day)
-# # fwrite(NODE_DATA,
-# #        file=paste0("NodeSpecifData_DG",year_from_record[i],".txt"))
 # 
 # rm(TempData,TempDataFrame,TempDT_NonbreedingPeriod,InCols,TargetCols)
 
@@ -676,7 +653,7 @@ body_mass = body_mass[body_mass > min_body_mass]
 #   # fwrite(NODE_DATA,file="NodeSpecifData_MeanWSI.txt")
 # }
 # 
-# NODE_DATA_LIST = vector("list")
+# NODE_DATA_LIST = NULL
 # for(i in 1:(length(year_from_record)-1)){
 #   # Use this with historical data:
 #   target_year = year_from_record[i]
@@ -705,8 +682,19 @@ body_mass = body_mass[body_mass > min_body_mass]
 # 
 #   setkey(WSI_DATA.nonbreeding_period,Code,X_INDEX,Y_INDEX)
 # 
+#   NODE_DATA =
+#     fread(paste0("NodeSpecifData_DG",year_from_record[i],".txt"))
 #   setkey(NODE_DATA,Code,X_INDEX,Y_INDEX)
-#   NODE_DATA_LIST[[i]] = NODE_DATA[WSI_DATA.nonbreeding_period]
+#   NODE_DATA_LIST = NODE_DATA[WSI_DATA.nonbreeding_period]
+# 
+#   InCols = names(NODE_DATA_LIST)[which(names(NODE_DATA_LIST)
+#                                        %like% "TD_BMR_day_")]
+#   NODE_DATA_LIST[,(InCols):=NULL]
+# 
+#   fwrite(NODE_DATA_LIST,
+#          file=paste0("NodeSpecifData_WSI_DG",year_from_record[i],".txt"))
+# 
+#   rm(NODE_DATA_LIST)
 # 
 #   print(i)
 # }
@@ -717,44 +705,6 @@ body_mass = body_mass[body_mass > min_body_mass]
 # gc()
 # rm(MetCostDT_NonbreedingPeriod,WSI_DATA.nonbreeding_period,WSI_DATA_frame,
 #    WSI_DATA,data_columns,OutCols)
-# gc()
-
-
-#
-# Create merged WSI/Daily Gain data ---------------------------------------
-# COMPLETE_DATA = vector("list")
-# for(i in 1:(length(year_from_record)-1)){
-#   setkey(DailyGain_by_day[[i]],"ID","Y_INDEX","X_INDEX","Code",
-#          "Longitude","Latitude")
-#   setkey(NODE_DATA_LIST[[i]],"ID","Y_INDEX","X_INDEX","Code",
-#          "Longitude","Latitude")
-# 
-#   COMPLETE_DATA[[i]] = NODE_DATA_LIST[[i]][DailyGain_by_day[[i]]]
-# 
-#   print(i)
-# }
-# 
-# # Normalize roosting, distance to breeding
-# for(i in 1:(length(year_from_record)-1)){
-#   COMPLETE_DATA[[i]][,`:=`(
-#     NormRoostShoreline = RoostShoreline/ sum(RoostShoreline),
-#     NormDistBreed = (max(DistBreed) - DistBreed) / 
-#       sum(max(DistBreed) - DistBreed)
-#   )]
-#   print(i)
-# }
-# 
-# # Saved merged data tables
-# for(i in 1:(length(year_from_record)-1)){
-#   fwrite(COMPLETE_DATA[[i]],
-#          file=paste0(year_from_record[i],"_InputData.txt"))
-# }
-
-
-#
-# Clean up environment ----------------------------------------------------
-# gc()
-# rm(DailyGain_by_day,NODE_DATA_LIST)
 # gc()
 
 
@@ -798,8 +748,8 @@ min_survival = .9975 #0.991
 #Top bin has 99.997% daily survivorship
 max_survival = .99997
 
-daily_survival = vector()
-for (i in 1:length(bc_bins)) {
+daily_survival = min_survival
+for (i in 2:length(bc_bins)) {
   daily_survival[i] = ((((max_survival - min_survival) / 
                            length(bc_bins)) * i) 
                        + min_survival)
@@ -891,9 +841,9 @@ cummul_flightcost[,BC_decrementvalue:=BC_decrement_total]
 #
 # Define parameters and rules for movement outside of loop ----------------
 # Weights for WSI, body condition, and distance to breeding node
-weight_WSI = 1/3
-weight_BC = 1/3
-weight_DB = 1/3
+weight_WSI = 0.33
+weight_BC = 0.33
+weight_DB = 0.34
 
 # Probability of departure component related to WSI
 # The relation below comes from Schummer et al. 2010
@@ -922,11 +872,6 @@ ProbMort_mtx = matrix(rep(ProbMort,nrow(NODE_DATA)),ncol=length(bc_bins),
 
 # BodyMass_DailyGain_Relation function (see commented code above for
 # parameter value generation)
-TD_DG_BodyMass_Relation = function(x) {
-  (-14.80800820381551 * ((x/1000) ^ 2)) + 
-    (153.24219961825537 * (x/1000)) + 
-    27.45433867668212
-}
 TD_DG_BM_conversion = 
   TD_DG_BodyMass_Relation(BodyCondition_Table[,BodyMass_g])
 
@@ -993,206 +938,206 @@ rm(NODE_DATA)
 Sys.time()
 start_timer = Sys.time()
 deadbirds = vector()
-# COMPLETE_DATA = NULL
-# for(j in 1:(length(year_from_record)-1)){
-#   
-#   COMPLETE_DATA = fread(paste0(year_from_record[j],"_InputData.txt"))
-#   
-#   for(i in 1:length(days)) {
-#     # Reduce forage material based on mass- and temperature-dependent 
-#     # daily gain for each body mass/condition class and landcover-specific
-#     # decay rates, with place holders for decay rates
-#     DayAbund = 
-#       as.matrix(COMPLETE_DATA[,paste0("N_Abund_",i-1),with=F])
-#     DailyGain = 
-#       as.matrix(COMPLETE_DATA[,paste0("DailyGain_day",i),with=F])
-#     ReducedForage = paste0("Forage_day_",i)
-#     
-#     BM_PopDist = 
-#       as.vector(as.matrix(
-#         BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i-1),
-#                             with=F]))
-#     
-#     COMPLETE_DATA[,(ReducedForage):=
-#                     (((ForageShoreline * (Shoreline_decay^i)) +
-#                         (ForageCrops * (Crops_decay^i)) +
-#                         (ForageWoodyWetlands * 
-#                            (WoodyWetlands_decay^i)) +
-#                         (ForageHerbWetlands * 
-#                            (HerbWetlands_decay^i)))) - 
-#                     (rowSums(matrix((DailyGain %o% 
-#                                        TD_DG_BM_conversion),
-#                                     ncol=length(bc_bins)) * 
-#                                matrix((DayAbund %o% BM_PopDist),
-#                                       ncol=length(bc_bins)),
-#                              na.rm=T))]
-#     
-#     NormReducedForage = paste0("NormForage_day_",i)
-#     incols = ReducedForage
-#     COMPLETE_DATA[,(NormReducedForage) := lapply(.SD,norm_func),
-#                   .SDcols=incols]
-#     
-#     # Calculate kilojoules gained per body condition to redistribute 
-#     # individuals among body condition classes after foraging
-#     DG_BC_Node = matrix(((DailyGain/39.7) %o% 
-#                            (TD_DG_BM_conversion/39.7)), 
-#                         ncol=length(bc_bins))
-#     
-#     DG_BC_Transition = BodyCondition_Table[,outer(BodyFat_g,BodyFat_g,
-#                                                   '-')]
-#     
-#     DG_BC_Node_Transition = vector("list")
-#     for(k in 1:length(bc_bins)){
-#       DG_BC_Node_Transition[[k]] = findInterval(DG_BC_Node[,k],
-#                                                 DG_BC_Transition[,k])
-#     }
-#     
-#     DG_BC_Node_Transition_mtx = 
-#       matrix(unlist(DG_BC_Node_Transition), ncol=length(bc_bins), 
-#              byrow=F)
-#     
-#     BC_Abund = matrix((DayAbund %o% BM_PopDist),ncol=length(bc_bins))
-#     
-#     BC_Abund_Gain_func = function(x) {
-#       sum(BC_Abund[which(DG_BC_Node_Transition_mtx==x)])
-#     }
-#     
-#     BC_Abund_Next = sapply(1:20,BC_Abund_Gain_func)
-#     BC_Abund_New = paste0("BodyMass_dist_discrete_day",i-1)
-#     BodyCondition_Table[,(BC_Abund_New):= 
-#                           BC_Abund_Next/sum(BC_Abund_Next)]
-#     
-#     BM_PopDist = 
-#       as.vector(as.matrix(
-#         BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i-1),
-#                             with=F]))
-#     
-#     rm(DailyGain,ReducedForage,DG_BC_Node,BC_Abund,BC_Abund_Next,
-#        BC_Abund_New)
-#     
-#     # Determine WSI- and body condition-dependent probability of departure
-#     WSIProbDepart = 
-#       as.matrix(COMPLETE_DATA[,paste0("WSI_day_",i),with=F])
-#     
-#     ProbDepart_WSI = 
-#       NAFunc((weight_WSI * (((WSIProb(WSIProbDepart) + wsi_cutoff) ^ 3) / 
-#                               (((WSIProb(WSIProbDepart) + wsi_cutoff) ^ 3) + 
-#                                  (wsi_cutoff ^ 3))) * 
-#                 (WSIProbDepart > wsi_cutoff)))
-#     
-#     ProbDepart_WSI_mtx = matrix(rep(ProbDepart_WSI,length(bc_bins)),
-#                                 ncol=length(bc_bins))
-#     
-#     ProbDepart = ProbDepart_WSI_mtx + ProbDepart_BC_mtx + 
-#       ProbDepart_DB_mtx
-#     
-#     AbundDepart_vec = rowSums(
-#       matrix((DayAbund %o% BM_PopDist),
-#              ncol=length(bc_bins)) * ProbDepart)
-#     
-#     rm(ProbDepart,ProbDepart_WSI,ProbDepart_WSI_mtx)
-#     
-#     # Use Cobb-Douglas function to calculate node-specific
-#     # attractiveness.
-#     NodeAttract = paste0("NodeAttract_day_",i)
-#     
-#     COMPLETE_DATA[,(NodeAttract):= as.numeric(
-#       (WSIProbDepart<=wsi_cutoff) * 
-#         (COMPLETE_DATA[,(NormReducedForage),with=F]^
-#            WeightScheme[i,ForageAvailComponent]) * 
-#         (NormRoostShoreline^WeightScheme[i,RoostingHabComponent]) *
-#         (NormDistBreed^WeightScheme[i,BreedingDistComponent]) * 
-#         (GammaMoveProb^WeightScheme[i,GammaMoveComponent]))]
-#     
-#     COMPLETE_DATA[,(NodeAttract) := lapply(.SD,NAFunc),
-#                   .SDcols=NodeAttract]
-#     COMPLETE_DATA[,(NodeAttract) := lapply(.SD,norm_func),
-#                   .SDcols=NodeAttract]
-#     
-#     rm(WSIProbDepart)
-#     
-#     # Determine next day's abundance based on probability of staying
-#     # and departing.
-#     NextAbund = paste0("N_Abund_",i)
-#     NodeAttract = 
-#       as.matrix(COMPLETE_DATA[,paste0("NodeAttract_day_",days[i]),
-#                               with=F])
-#     
-#     gc()
-#     CurrAbund = 
-#       (DayAbund - AbundDepart_vec) + 
-#       (rowSums(NodeAttract %o% AbundDepart_vec,na.rm=TRUE))
-#     gc()
-#     
-#     # Redistribute departing population among body condition classes based 
-#     # on movement among nodes
-#     BC_DepartAbund = as.vector(
-#       colSums(AbundDepart_vec %o% BM_PopDist))
-#     BC_DepartAbund_mtx = matrix(rep(BC_DepartAbund,nrow(BC_dist_seq_mtx)),
-#                                 ncol=length(bc_bins),byrow=TRUE)
-#     
-#     BC_DepartAbundPropor_dist = 
-#       data.table(cbind((BC_DepartAbund_mtx * BC_dist_seq_mtx),
-#                        cummul_flightcost[-1,BC_decrementvalue]))
-#     
-#     target_cols=paste0("V",1:length(bc_bins))
-#     BC_DepartAbundDist = BC_DepartAbundPropor_dist[,lapply(.SD,sum),by=V21,
-#                                                    .SDcols=target_cols]
-#     
-#     # Calculate number of inidivuals leaving each body condition
-#     BC_Abund_Loss = BC_DepartAbund - 
-#       colSums(BC_DepartAbundDist[2:nrow(BC_DepartAbundDist),
-#                                  c(2:(length(bc_bins)+1)),with=F])
-#     
-#     # Calculate number of individuals entering each body condition
-#     BC_DepartAbundDist_mtx = 
-#       as.matrix(BC_DepartAbundDist[,2:ncol(BC_DepartAbundDist)])
-#     element_indicator = row(BC_DepartAbundDist_mtx) - 
-#       col(BC_DepartAbundDist_mtx)
-#     
-#     BC_DepartAbundDist_diags = 
-#       split(BC_DepartAbundDist_mtx,element_indicator)
-#     
-#     BC_Abund_Gain = 
-#       unlist(lapply(BC_DepartAbundDist_diags,sum))[1:length(bc_bins)]
-#     
-#     BC_Abund_New = paste0("BodyMass_dist_discrete_day",i)
-#     BodyCondition_Table[,(BC_Abund_New):=
-#                           (BC_Abund_Loss + BC_Abund_Gain) / 
-#                           sum(BC_Abund_Loss + BC_Abund_Gain)]
-#     
-#     BM_PopDist = 
-#       as.vector(as.matrix(
-#         BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i),
-#                             with=F]))
-#     
-#     # Incur mortality
-#     ProporDie = rowSums(floor(
-#       matrix((CurrAbund %o% BM_PopDist),
-#              ncol=length(bc_bins))) * ProbMort_mtx)
-#     
-#     # Calulcate remaining abundance after mortality
-#     COMPLETE_DATA[,(NextAbund) := CurrAbund - ProporDie]
-#     COMPLETE_DATA[,sum(CurrAbund-ProporDie)]
-#     
-#     # deadbirds[i] = sum(CurrAbund) - sum(COMPLETE_DATA[,NextAbund,
-#     #                                                         with=F])
-#     # mortality = deadbirds[i]/N_0
-#     # print(mortality*100)
-#     
-#     # Remove objects from environment to optimize memory use
-#     rm(DayAbund,NextAbund,NodeAttract,AbundDepart_vec,CurrAbund,
-#        ProporDie,NormReducedForage)
-#     
-#     print(i)
-#   }
-#   # Save COMPLETE_DATA element and remove to reduce memory usage
-#   fwrite(COMPLETE_DATA,
-#          file=paste0(year_from_record[j],"_Prediction.txt"))
-#   rm(COMPLETE_DATA)
-#   
-#   print(j)
-# }
+COMPLETE_DATA = NULL
+for(j in 1:(length(year_from_record)-1)){
+
+  COMPLETE_DATA = 
+    fread(paste0("NodeSpecifData_WSI_DG",year_from_record[j],".txt"))
+
+  for(i in 1:length(days)) {
+    # Reduce forage material based on mass- and temperature-dependent
+    # daily gain for each body mass/condition class and landcover-specific
+    # decay rates, with place holders for decay rates
+    DayAbund =
+      as.matrix(COMPLETE_DATA[,paste0("N_Abund_",i-1),with=F])
+    DailyGain =
+      as.matrix(COMPLETE_DATA[,paste0("DailyGain_day",i),with=F])
+    ReducedForage = paste0("Forage_day_",i)
+
+    BM_PopDist =
+      as.vector(as.matrix(
+        BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i-1),
+                            with=F]))
+
+    COMPLETE_DATA[,(ReducedForage):=
+                    (((ForageShoreline * (Shoreline_decay^i)) +
+                        (ForageCrops * (Crops_decay^i)) +
+                        (ForageWoodyWetlands *
+                           (WoodyWetlands_decay^i)) +
+                        (ForageHerbWetlands *
+                           (HerbWetlands_decay^i)))) -
+                    (rowSums(matrix((DailyGain %o%
+                                       TD_DG_BM_conversion),
+                                    ncol=length(bc_bins)) *
+                               matrix((DayAbund %o% BM_PopDist),
+                                      ncol=length(bc_bins)),
+                             na.rm=T))]
+
+    NormReducedForage = paste0("NormForage_day_",i)
+    incols = ReducedForage
+    COMPLETE_DATA[,(NormReducedForage) := lapply(.SD,norm_func),
+                  .SDcols=incols]
+
+    # Calculate kilojoules gained per body condition to redistribute
+    # individuals among body condition classes after foraging
+    DG_BC_Node = matrix(((DailyGain) %o%(TD_DG_BM_conversion/39.7)),
+                        ncol=length(bc_bins))
+
+    DG_BC_Transition = BodyCondition_Table[,outer(BodyFat_g,BodyFat_g,
+                                                  '-')]
+
+    DG_BC_Node_Transition = vector("list")
+    for(k in 1:length(bc_bins)){
+      DG_BC_Node_Transition[[k]] = findInterval(DG_BC_Node[,k],
+                                                DG_BC_Transition[,k])
+    }
+
+    DG_BC_Node_Transition_mtx =
+      matrix(unlist(DG_BC_Node_Transition), ncol=length(bc_bins),
+             byrow=F)
+
+    BC_Abund = matrix((DayAbund %o% BM_PopDist),ncol=length(bc_bins))
+
+    BC_Abund_Gain_func = function(x) {
+      sum(BC_Abund[which(DG_BC_Node_Transition_mtx==x)])
+    }
+
+    BC_Abund_Next = sapply(1:20,BC_Abund_Gain_func)
+    BC_Abund_New = paste0("BodyMass_dist_discrete_day",i)
+    BodyCondition_Table[,(BC_Abund_New):=
+                          BC_Abund_Next/sum(BC_Abund_Next)]
+
+    BM_PopDist =
+      as.vector(as.matrix(
+        BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i-1),
+                            with=F]))
+
+    rm(DailyGain,ReducedForage,DG_BC_Node,BC_Abund,BC_Abund_Next,
+       BC_Abund_New)
+
+    # Determine WSI- and body condition-dependent probability of departure
+    WSIProbDepart =
+      as.matrix(COMPLETE_DATA[,paste0("WSI_day_",i),with=F])
+
+    ProbDepart_WSI =
+      NAFunc((weight_WSI * (((WSIProb(WSIProbDepart) + wsi_cutoff) ^ 3) /
+                              (((WSIProb(WSIProbDepart) + wsi_cutoff) ^ 3) +
+                                 (wsi_cutoff ^ 3))) *
+                (WSIProbDepart > wsi_cutoff)))
+
+    ProbDepart_WSI_mtx = matrix(rep(ProbDepart_WSI,length(bc_bins)),
+                                ncol=length(bc_bins))
+
+    ProbDepart = ProbDepart_WSI_mtx + ProbDepart_BC_mtx +
+      ProbDepart_DB_mtx
+
+    AbundDepart_vec = rowSums(
+      matrix((DayAbund %o% BM_PopDist),
+             ncol=length(bc_bins)) * ProbDepart)
+
+    rm(ProbDepart,ProbDepart_WSI,ProbDepart_WSI_mtx)
+
+    # Use Cobb-Douglas function to calculate node-specific
+    # attractiveness.
+    NodeAttract = paste0("NodeAttract_day_",i)
+
+    COMPLETE_DATA[,(NodeAttract):= as.numeric(
+      (WSIProbDepart<=wsi_cutoff) *
+        (COMPLETE_DATA[,(NormReducedForage),with=F]^
+           WeightScheme[i,ForageAvailComponent]) *
+        (NormRoostShoreline^WeightScheme[i,RoostingHabComponent]) *
+        (NormDistBreed^WeightScheme[i,BreedingDistComponent]) *
+        (GammaMoveProb^WeightScheme[i,GammaMoveComponent]))]
+
+    COMPLETE_DATA[,(NodeAttract) := lapply(.SD,NAFunc),
+                  .SDcols=NodeAttract]
+    COMPLETE_DATA[,(NodeAttract) := lapply(.SD,norm_func),
+                  .SDcols=NodeAttract]
+
+    rm(WSIProbDepart)
+
+    # Determine next day's abundance based on probability of staying
+    # and departing.
+    NextAbund = paste0("N_Abund_",i)
+    NodeAttract =
+      as.matrix(COMPLETE_DATA[,paste0("NodeAttract_day_",days[i]),
+                              with=F])
+
+    gc()
+    CurrAbund =
+      (DayAbund - AbundDepart_vec) +
+      (rowSums(NodeAttract %o% AbundDepart_vec,na.rm=TRUE))
+    gc()
+
+    # Redistribute departing population among body condition classes based
+    # on movement among nodes
+    BC_DepartAbund = as.vector(
+      colSums(AbundDepart_vec %o% BM_PopDist))
+    BC_DepartAbund_mtx = matrix(rep(BC_DepartAbund,nrow(BC_dist_seq_mtx)),
+                                ncol=length(bc_bins),byrow=TRUE)
+
+    BC_DepartAbundPropor_dist =
+      data.table(cbind((BC_DepartAbund_mtx * BC_dist_seq_mtx),
+                       cummul_flightcost[-1,BC_decrementvalue]))
+
+    target_cols=paste0("V",1:length(bc_bins))
+    BC_DepartAbundDist = BC_DepartAbundPropor_dist[,lapply(.SD,sum),by=V21,
+                                                   .SDcols=target_cols]
+
+    # Calculate number of inidivuals leaving each body condition
+    BC_Abund_Loss = BC_DepartAbund -
+      colSums(BC_DepartAbundDist[2:nrow(BC_DepartAbundDist),
+                                 c(2:(length(bc_bins)+1)),with=F])
+
+    # Calculate number of individuals entering each body condition
+    BC_DepartAbundDist_mtx =
+      as.matrix(BC_DepartAbundDist[,2:ncol(BC_DepartAbundDist)])
+    element_indicator = row(BC_DepartAbundDist_mtx) -
+      col(BC_DepartAbundDist_mtx)
+
+    BC_DepartAbundDist_diags =
+      split(BC_DepartAbundDist_mtx,element_indicator)
+
+    BC_Abund_Gain =
+      unlist(lapply(BC_DepartAbundDist_diags,sum))[1:length(bc_bins)]
+
+    BC_Abund_New = paste0("BodyMass_dist_discrete_day",i)
+    BodyCondition_Table[,(BC_Abund_New):=
+                          (BC_Abund_Loss + BC_Abund_Gain) /
+                          sum(BC_Abund_Loss + BC_Abund_Gain)]
+
+    BM_PopDist =
+      as.vector(as.matrix(
+        BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i),
+                            with=F]))
+
+    # Incur mortality
+    ProporDie = rowSums(floor(
+      matrix((CurrAbund %o% BM_PopDist),
+             ncol=length(bc_bins))) * ProbMort_mtx)
+
+    # Calulcate remaining abundance after mortality
+    COMPLETE_DATA[,(NextAbund) := CurrAbund - ProporDie]
+    COMPLETE_DATA[,sum(CurrAbund-ProporDie)]
+
+    # deadbirds[i] = sum(CurrAbund) - sum(COMPLETE_DATA[,NextAbund,
+    #                                                         with=F])
+    # mortality = deadbirds[i]/N_0
+    # print(mortality*100)
+
+    # Remove objects from environment to optimize memory use
+    rm(DayAbund,NextAbund,NodeAttract,AbundDepart_vec,CurrAbund,
+       ProporDie,NormReducedForage)
+
+    print(i)
+  }
+  # Save COMPLETE_DATA element and remove to reduce memory usage
+  fwrite(COMPLETE_DATA,
+         file=paste0(year_from_record[j],"_PredictionTEST.txt"))
+  rm(COMPLETE_DATA)
+
+  print(j)
+}
 
 rm(ProbDepart_BC_mtx,ProbDepart_DB_mtx,ProbMort_mtx,DG_BC_Node_Transition,
    DG_BC_Node_Transition_mtx,breedingdistances,ProbDepart_DB,
@@ -1200,7 +1145,7 @@ rm(ProbDepart_BC_mtx,ProbDepart_DB_mtx,ProbMort_mtx,DG_BC_Node_Transition,
    BC_DepartAbundPropor_dist,BC_dist_seq_ls,BC_dist_seq_ls_maxln,
    BC_dist_seq_mtx,BC_distprob,BC_Abund_Gain,BC_DepartAbundDist,
    BC_DepartAbundDist_diags,BC_DepartAbundDist_mtx)
-   
+
 
 Sys.time()
 end_timer=Sys.time()
@@ -1210,56 +1155,144 @@ total_time
 
 #
 # Read in predictive migration dynamics for analysis ----------------------
-mortality = annmean_availhabitat = annsd_availhabitat = 
-  annmin_availhabitat = BR_Center = EtB_Ratio = vector()
-for(i in 1:(length(year_from_record)-1)){
-  COMPLETE_DATA = fread(paste0(year_from_record[i],"_Prediction.txt"))
-  
-  # Mortality over non-breeding season
-  mortality[i] = COMPLETE_DATA[,(sum(N_Abund_0) - sum(N_Abund_335)) / 
-                                 sum(N_Abund_0)]
-  
-  # Availability of habitat across non-breeding period (based on WSI)
-  target_cols = 
-    names(COMPLETE_DATA)[which(names(COMPLETE_DATA) %like% "WSI_day_")]
-  availhabitat = 
-    COMPLETE_DATA[,lapply(.SD,inhospitable),.SDcols=target_cols]
-  annmean_availhabitat[i] = mean(as.matrix(availhabitat))
-  annsd_availhabitat[i] = sd(as.matrix(availhabitat))
-  annmin_availhabitat[i] = 1 - max(as.matrix(availhabitat))
-  
-  # Identify attractiveness of breeding region center
-  BR_Center[i] = 
-    COMPLETE_DATA[X_INDEX<76 & X_INDEX>50 & Y_INDEX<96 & Y_INDEX>65,
-                  mean(NodeAttract_day_1)]
-  
-  # Ratio of end-of-season to beginning-of-season attractiveness in
-  # breeding region
-  EtB_Ratio[i] = 
-    COMPLETE_DATA[X_INDEX<76 & X_INDEX>50 & Y_INDEX<96 & Y_INDEX>65,
-                  mean(NodeAttract_day_335)] / 
-    COMPLETE_DATA[X_INDEX<76 & X_INDEX>50 & Y_INDEX<96 & Y_INDEX>65,
-                  mean(NodeAttract_day_1)]
-  
-  # Clean up environment
-  rm(target_cols,availhabitat,COMPLETE_DATA)
-  
-  print(i)
-}
+# mortality = annmean_availhabitat = annsd_availhabitat = 
+#   annmin_availhabitat = BR_Center = EtB_Ratio = vector()
+# for(i in 1:(length(year_from_record)-1)){
+#   COMPLETE_DATA = fread(paste0(year_from_record[i],"_Prediction.txt"))
+#   
+#   # Mortality over non-breeding season
+#   mortality[i] = COMPLETE_DATA[,(sum(N_Abund_0) - sum(N_Abund_335)) / 
+#                                  sum(N_Abund_0)]
+#   
+#   # Availability of habitat across non-breeding period (based on WSI)
+#   target_cols = 
+#     names(COMPLETE_DATA)[which(names(COMPLETE_DATA) %like% "WSI_day_")]
+#   availhabitat = 
+#     COMPLETE_DATA[,lapply(.SD,inhospitable),.SDcols=target_cols]
+#   annmean_availhabitat[i] = mean(as.matrix(availhabitat))
+#   annsd_availhabitat[i] = sd(as.matrix(availhabitat))
+#   annmin_availhabitat[i] = 1 - max(as.matrix(availhabitat))
+#   
+#   # Identify attractiveness of breeding region center
+#   BR_Center[i] = 
+#     COMPLETE_DATA[X_INDEX<76 & X_INDEX>50 & Y_INDEX<96 & Y_INDEX>65,
+#                   mean(NodeAttract_day_1)]
+#   
+#   # Ratio of end-of-season to beginning-of-season attractiveness in
+#   # breeding region
+#   EtB_Ratio[i] = 
+#     COMPLETE_DATA[X_INDEX<76 & X_INDEX>50 & Y_INDEX<96 & Y_INDEX>65,
+#                   mean(NodeAttract_day_335)] / 
+#     COMPLETE_DATA[X_INDEX<76 & X_INDEX>50 & Y_INDEX<96 & Y_INDEX>65,
+#                   mean(NodeAttract_day_1)]
+#   
+#   # Clean up environment
+#   rm(target_cols,availhabitat,COMPLETE_DATA)
+#   
+#   print(i)
+# }
+# 
+# norm_mortality = ZO_norm(mortality)
+# norm_annmean_availhabitat = ZO_norm(annmean_availhabitat)
+# norm_annmin_availhabitat = ZO_norm(annmin_availhabitat)
+# 
+# SummaryStats = 
+#   data.table(Years=year_from_record[1:(length(year_from_record)-1)],
+#              Mortality=norm_mortality,
+#              Mean_AvailHab=annmean_availhabitat,
+#              StDev_AvailHab=annsd_availhabitat,
+#              Min_AvailHab=annmin_availhabitat,
+#              BreedingAttractiveness = BR_Center,
+#              EndofPeriodRatio = EtB_Ratio)
+# 
+# fwrite(SummaryStats,file="FullRun_SummaryStats.txt")
 
-norm_mortality = ZO_norm(mortality)
-norm_annmean_availhabitat = ZO_norm(annmean_availhabitat)
-norm_annmin_availhabitat = ZO_norm(annmin_availhabitat)
+SummaryStats = fread("FullRun_SummaryStats.txt")
 
-SummaryStats = data.table(Years=year_from_record,
-                          Mortality=norm_mortality,
-                          Mean_AvailHab=annmean_availhabitat,
-                          StDev_AvailHab=annsd_availhabitat,
-                          Min_AvailHab=annmin_availhabitat,
-                          BreedingAttractiveness = BR_Center,
-                          EndofPeriodRatio = EtB_Ratio)
+NormMort_Plot = 
+  ggplot(data=SummaryStats,aes(x=Years,y=Mortality)) + 
+  geom_point(size=2) + geom_line() +      
+  xlab("Years") + 
+  ylab("Normalized Mortality") + 
+  theme_minimal()
+ggsave(paste0("NormalizedMortality_.jpeg"),
+       NormMort_Plot,width=5,height=5)
+dev.off()
 
-fwrite(SummaryStats,file="FullRun_SummaryStats.txt")
+MeanAvailHab_Plot = 
+  ggplot(data=SummaryStats,aes(x=Years,y=Mean_AvailHab)) + 
+  geom_errorbar(aes(ymin=ifelse(Mean_AvailHab-(1.96*StDev_AvailHab)<0,0,
+                                Mean_AvailHab-(1.96*StDev_AvailHab)),
+                    ymax=Mean_AvailHab+(1.96*StDev_AvailHab))) +
+  geom_point(size=2) + 
+  xlab("Years") + 
+  ylab("Proporitonal Mean Annual Available Habitat") + 
+  theme_minimal()
+ggsave(paste0("ProporMeanAnnAvailHab.jpeg"),
+       MeanAvailHab_Plot,width=5,height=5)
+dev.off()
+
+MinAvailHab_Plot = 
+  ggplot(data=SummaryStats,aes(x=Years,y=Min_AvailHab)) + 
+  geom_point(size=2) + geom_line(lty="dotted") + 
+  ylim(0,SummaryStats[,max(Min_AvailHab)]) + xlab("Years") + 
+  ylab("Proportional Minimum Annual Available Habitat") + 
+  theme_minimal()
+ggsave(paste0("ProporMinAnnAvailHab.jpeg"),
+       MinAvailHab_Plot,width=5,height=5)
+dev.off()
+
+Combined_Plot = 
+  ggplot(data=SummaryStats,aes(x=Years,y=Mortality)) + 
+  geom_point(size=2,col="red") + geom_line(lty="dotted",col="red") +  
+  # geom_errorbar(aes(ymin=ifelse(Mean_AvailHab-(1.96*StDev_AvailHab)<0,0,
+  #                               Mean_AvailHab-(1.96*StDev_AvailHab)),
+  #                   ymax=Mean_AvailHab+(1.96*StDev_AvailHab))) +
+  # geom_point(aes(x=Years,y=Mean_AvailHab),size=2) +
+  geom_point(aes(x=Years,y=Min_AvailHab),size=2,col="blue") + 
+  geom_line(aes(x=Years,y=Min_AvailHab),lty="dotted",col="blue") + 
+  xlab("Years") + 
+  ylab("Normalized Metrics") + 
+  theme_minimal()
+Combined_Plot
+ggsave(paste0("AllVariables.jpeg"),
+       Combined_Plot,width=5,height=5)
+dev.off()
+
+Mort_Hab_Plot = 
+  ggplot(data=SummaryStats,aes(x=Min_AvailHab,y=Mortality)) + 
+  geom_point(size=2) + geom_line(lty="dotted") +  
+  xlab("Proportional Minimum Annual Available Habitat") + 
+  ylab("Normalized Mortality") + 
+  theme_minimal()
+Mort_Hab_Plot
+ggsave(paste0("Mortality_v_ProporMinAnnAvailHab.jpeg"),
+       Mort_Hab_Plot,width=5,height=5)
+dev.off()
+
+BestMatch = SummaryStats[BreedingAttractiveness > 6.97e-05,
+                         Years[which.min(abs(1-EndofPeriodRatio))]]
+BestYear = SummaryStats[,which(Years==BestMatch)]
+COMPLETE_DATA = fread(paste0(year_from_record[BestYear],
+                             "_Prediction.txt"))
+COMPLETE_DATA = fread(paste0(year_from_record[57],
+                             "_Prediction.txt"))
+
+ggplot(data=COMPLETE_DATA,aes(x=X_INDEX,y=Y_INDEX,
+                              col=ZO_norm(N_Abund_335))) +
+  geom_point(size=2,shape=15) +
+  scale_color_gradientn(
+    name=paste0("Abundance\non ",
+                format(as.Date(335,origin=NonbreedingStart),
+                       format="%b %d"),"\n"),
+    colors=tim.colors(10)) + 
+  theme_minimal() +
+  theme(
+    axis.text=element_blank(),
+    axis.title=element_blank(),
+    panel.grid.major=element_blank(),
+    panel.grid.minor=element_blank()
+  )
 
 for(i in 1:(length(year_from_record)-1)){  
   COMPLETE_DATA = fread(paste0(year_from_record[i],"_Prediction.txt"))
@@ -1311,35 +1344,6 @@ for(i in 1:(length(year_from_record)-1)){
   
   rm(COMPLETE_DATA)
 }
-
-NormMort_Plot = 
-  ggplot(data=SummaryStats,aes(x=Years,y=Mortality)) + 
-  geom_point(size=2) +         
-  xlab("Years") + 
-  ylab("Normalized Mortality") + 
-  theme_minimal()
-ggsave(paste0("NormalizedMortality_",year_from_record[i],".jpeg"),
-       NormMort_Plot,width=5,height=5)
-
-MeanAvailHab_Plot = 
-  ggplot(data=SummaryStats,aes(x=Years,y=Mean_AvailHab)) + 
-  geom_errorbar(aes(ymin=Mean_AvailHab-(1.96*StDev_AvailHab),
-                    ymax=Mean_AvailHab+(1.96*StDev_AvailHab))) +
-  geom_point(size=2) + 
-  xlab("Years") + 
-  ylab("Proporitonal Mean Annual Available Habitat") + 
-  theme_minimal()
-ggsave(paste0("ProporMeanAnnAvailHab",year_from_record[i],".jpeg"),
-       MeanAvailHab_Plot,width=5,height=5)
-
-MinAvailHab_Plot = 
-  ggplot(data=SummaryStats,aes(x=Years,y=Min_AvailHab)) + 
-  geom_point(size=2) + 
-  xlab("Years") + 
-  ylab("Proportional Minimum Annual Available Habitat") + 
-  theme_minimal()
-ggsave(paste0("ProporMinAnnAvailHab",year_from_record[i],".jpeg"),
-       MinAvailHab_Plot,width=5,height=5)
   
 
 #
@@ -1383,13 +1387,13 @@ ggsave(paste0("ProporMinAnnAvailHab",year_from_record[i],".jpeg"),
 
 # Node attractiveness
 ggplot(data=COMPLETE_DATA,aes(x=X_INDEX,y=Y_INDEX,
-                              col=ZO_norm(N_Abund_0))) +
+                              col=ZO_norm(N_Abund_1))) +
   geom_point(size=2,shape=15) +
   scale_color_gradientn(
     name=paste0("Abundance\non ",
-                format(as.Date(0,origin=NonbreedingStart),
-                       format="%b %d"),"\n"),
-    colors=tim.colors(10)) + 
+                format(as.Date(1,origin=NonbreedingStart),
+                       format="%b %d")),
+    colors=tim.colors(10)) +
   theme_minimal() +
   theme(
     axis.text=element_blank(),
@@ -1397,25 +1401,23 @@ ggplot(data=COMPLETE_DATA,aes(x=X_INDEX,y=Y_INDEX,
     panel.grid.major=element_blank(),
     panel.grid.minor=element_blank()
   )
-#
-# 
-# fwrite(NODE_DATA,file="NodeSpecifData_DAILYABUND.txt")
-# 
-# # Daily abundance
-# NODE_DATA = fread("NodeSpecifData_DAILYABUND.txt")
+
+# ggplot(data=COMPLETE_DATA[X_INDEX<80&X_INDEX>45&Y_INDEX<100&Y_INDEX>60],
+#        aes(x=X_INDEX,y=Y_INDEX,col=WSI_day_335)) + 
+#   geom_point(size=15,shape=15)
 
 # Animation for daily node abundance (variable scale)
 DailyAbundAnimate_func = function() {
   for(i in 1:length(days)){
     print(
-      ggplot(data=NODE_DATA,aes_string(x="X_INDEX",y="Y_INDEX",
+      ggplot(data=COMPLETE_DATA,aes_string(x="X_INDEX",y="Y_INDEX",
                                        col=paste0("N_Abund_",i-1))) +
         geom_point(size=2,shape=15) +
         scale_color_gradientn(
           name=paste0("Abundance\non ",
                       format(as.Date(i,origin=NonbreedingStart),
                              format="%b %d")),
-          colors=tim.colors(10)) + #,limits=c(0,70000)) +
+          colors=tim.colors(10)) +
         theme_minimal() +
         theme(
           axis.text=element_blank(),
@@ -1434,17 +1436,17 @@ saveVideo(DailyAbundAnimate_func(),interval=0.1,
 DailyAbundAnimate_func = function() {
   for(i in 1:length(days)){
     DayAbund = 
-      ZO_norm(as.matrix(NODE_DATA[,paste0("N_Abund_",i-1),with=F]))
+      ZO_norm(as.matrix(COMPLETE_DATA[,paste0("N_Abund_",i-1),with=F]))
     
     print(
-      ggplot(data=NODE_DATA,aes_string(x="X_INDEX",y="Y_INDEX",
+      ggplot(data=COMPLETE_DATA,aes_string(x="X_INDEX",y="Y_INDEX",
                                        col=DayAbund)) +
         geom_point(size=2,shape=15) +
         scale_color_gradientn(
           name=paste0("Abundance\non ",
                       format(as.Date(i,origin=NonbreedingStart),
                              format="%b %d")),
-          colors=tim.colors(10)) + #,limits=c(0,70000)) +
+          colors=tim.colors(10)) +
         theme_minimal() +
         theme(
           axis.text=element_blank(),
@@ -1456,63 +1458,58 @@ DailyAbundAnimate_func = function() {
   }  
 }
 
-saveVideo(DailyAbundAnimate_func(),interval=0.1,
-          video.name="DailyAbundance_NormScale.mp4")
-
-# Animation for daily body condition class proportional abundance
-DailyBCPAAnimate_func = function() {
-  for(i in 1:length(days)){
-    DayProportion = 
-      ZO_norm(as.matrix(
-        BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i),
-                            with=F]))
-    print(
-      ggplot(data=BodyCondition_Table,
-             aes(x=BC_bins,y=DayProportion)) +
-        geom_line(lwd=1.2) + 
-        xlab("Body Condition Class") + 
-        ylab("Normalized Proportional Abundance") +
-        ggtitle(paste0(format(as.Date(i,origin=NonbreedingStart),
-                              format="%b %d"))) +
-        theme_bw() +
-        theme(
-          axis.text.x=element_text(size=16,face="bold",colour="black"),
-          axis.text.y=element_text(size=16,face="bold",colour="black"),
-          axis.title=element_text(size=24,face="bold",colour="black"),
-          plot.title=element_text(size=24,face="bold",colour="black")
-          
-        )
-    )
-  }  
+for(i in 1:(length(year_from_record)-1)) {
+  saveVideo(DailyAbundAnimate_func(),interval=0.1,
+            video.name="RERUNDailyAbundance_NormScale",year_from_record[i],".mp4")
 }
 
-saveVideo(DailyBCPAAnimate_func(),interval=0.1,
-          video.name="DailyBCPA.mp4")
-
-# Plot of most abundant body condition class each day
-MaxAbund_BCClass = vector()
-for(i in 1:length(days)){
-  DayAbundBC = as.matrix(
-    BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i),with=F]
-  )
-  MaxAbund_BCClass[i] = which.max(DayAbundBC)
-  
-}
-
-par(cex.main=1.5,cex.lab=1.5)
-plot(MaxAbund_BCClass~days, type="l",lwd=1.5,bty="n",
-     ylim=c(0,length(bc_bins)),
-     main="Most Populous Body Condition Class per Day",
-     xlab="Day of non-breeding period",
-     ylab="Body Condition Class",
-     font.lab=2)
+# # Animation for daily body condition class proportional abundance
+# DailyBCPAAnimate_func = function() {
+#   for(i in 1:length(days)){
+#     DayProportion = 
+#       ZO_norm(as.matrix(
+#         BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i),
+#                             with=F]))
+#     print(
+#       ggplot(data=BodyCondition_Table,
+#              aes(x=BC_bins,y=DayProportion)) +
+#         geom_line(lwd=1.2) + 
+#         xlab("Body Condition Class") + 
+#         ylab("Normalized Proportional Abundance") +
+#         ggtitle(paste0(format(as.Date(i,origin=NonbreedingStart),
+#                               format="%b %d"))) +
+#         theme_bw() +
+#         theme(
+#           axis.text.x=element_text(size=16,face="bold",colour="black"),
+#           axis.text.y=element_text(size=16,face="bold",colour="black"),
+#           axis.title=element_text(size=24,face="bold",colour="black"),
+#           plot.title=element_text(size=24,face="bold",colour="black")
+#           
+#         )
+#     )
+#   }  
+# }
+# 
+# saveVideo(DailyBCPAAnimate_func(),interval=0.1,
+#           video.name="DailyBCPA.mp4")
+# 
+# # Plot of most abundant body condition class each day
+# MaxAbund_BCClass = vector()
+# for(i in 1:length(days)){
+#   DayAbundBC = as.matrix(
+#     BodyCondition_Table[,paste0("BodyMass_dist_discrete_day",i),with=F]
+#   )
+#   MaxAbund_BCClass[i] = which.max(DayAbundBC)
+#   
+# }
+# 
+# par(cex.main=1.5,cex.lab=1.5)
+# plot(MaxAbund_BCClass~days, type="l",lwd=1.5,bty="n",
+#      ylim=c(0,length(bc_bins)),
+#      main="Most Populous Body Condition Class per Day",
+#      xlab="Day of non-breeding period",
+#      ylab="Body Condition Class",
+#      font.lab=2)
 
 
 #
-
-
-
-
-
-
-
