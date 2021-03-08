@@ -1,6 +1,6 @@
-# migration_model
-# created 7/20/2016
-Private repository for the source code for the former-IWMM non-breeding season energetics-based avian movement model
+# Generalized Avian Movement and Energetics Model
+
+Repository for the source code for the former-IWMM non-breeding season energetics-based avian movement model
 
 The files Weather_Severity_Index v2.R, flight_velocity_relationship v2.R, and GAME_Model v6.R are all that are needed to run the model, from start to finish. If NodeSpecifData.txt is present, the GAME_Model v6.R can be run with the noted section commented out. 
 
